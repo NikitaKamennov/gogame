@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Space Invaders — 10 уровней</title>
+<style>
+/* Тёмный фон страницы и базовая типографика */
+body {
+  font-family: Arial, sans-serif;
+  background: #2a2a2a;
+  color: #eaeaea;
+  max-width: 1200px;
+  margin: 20px auto;
+  padding: 0 16px;
+}
+h1 { margin: 0 0 12px; }
+
+/* Две колонки: поле (слева) и панель (справа) */
+.row {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .row { grid-template-columns: 1fr; }
+}
+
+/* Левая панель с игрой на светлом фоне */
+.game-panel {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff;
+  color: #222;
+}
+.game-panel h2 { margin: 0 0 10px; font-size: 18px; }
+.legend { margin-top: 8px; font-size: 14px; color: #555; }
+
+canvas { border: 1px solid #ccc; background: #000; display: block; border-radius: 6px; }
+
+.hud { margin: 10px 0 0; display: flex; gap: 16px; flex-wrap: wrap; color: #444; }
+
+/* Правая панель управления */
+.panel {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fafafa;
+  color: #222;
+}
+.panel h2 { margin: 0 0 10px; font-size: 18px; }
+.players { display: flex; flex-wrap: wrap; gap: 8px; }
+.player-btn { padding: 6px 10px; border: 1px solid #999; border-radius: 6px; background: #fff; cursor: pointer; }
+.player-btn:hover { background: #f0f0f0; }
+.player-btn.active { background: #007cba; color: #fff; border-color: #007cba; }
+.add-form { display: flex; gap: 8px; margin-top: 8px; }
+.add-form input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
+.add-form button { padding: 8px 12px; background: #007cba; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.add-form button:hover { background: #005a87; }
+.info { margin-top: 10px; font-size: 14px; color: #444; }
+
+.actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { padding: 8px 12px; border-radius: 6px; cursor: pointer; border: 1px solid #ccc; background: #eee; color: #111; }
+.btn:hover { background: #e0e0e0; }
+.btn.primary { background: #28a745; color: #fff; border: none; }
+.btn.primary:hover { background: #1e7e34; }
+.btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+
+.status { margin-top: 8px; padding: 8px; background: #eef6ff; border: 1px solid #cfe2ff; border-radius: 6px; min-height: 20px; color: #222; }
+.muted { color: #777; }
+
+/* Модалка */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 1000; }
+.modal.open { display: flex; }
+.modal-content { width: 90%; max-width: 420px; background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); color: #222; }
+.modal-content h3 { margin: 0 0 10px; }
+.modal-content p { margin: 0 0 16px; color: #444; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.modal-actions .btn { min-width: 100px; }
+
+/* Навигация */
+.nav { margin: 8px 0 16px; }
+.nav a { color: #8ecbff; text-decoration: none; }
+.nav a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="nav"><a href="/">← Выбор игры</a></div>
+<h1>Space Invaders — 10 уровней</h1>
+
+<div class="row">
+  <!-- Игровое поле слева -->
+  <div class="game-panel">
+    <h2>Поле 800×600</h2>
+    <canvas id="game" width="800" height="600"></canvas>
+    <div class="hud">
+      <div id="hudPlayer">Игрок: —</div>
+      <div id="hudLevel">Уровень: 1/10</div>
+      <div id="hudScore">Очки: 0</div>
+      <div id="hudLives">Жизни: 3</div>
+      <div id="hudAliens">Пришельцы: 0</div>
+      <div id="hudFire">КД выстрела: —</div>
+      <div id="hudEnemyRate">Скорость огня врага: —</div>
+    </div>
+    <div class="legend">
+      Управление: ←/→ или A/D — движение корабля, Space — выстрел. P — Пауза/Продолжить, Space в неактивном состоянии — Старт.<br/>
+      Победа — уничтожьте всех пришельцев. На 10 уровне после победы игра завершается.
+    </div>
+  </div>
+
+  <!-- Панель управления справа -->
+  <div class="panel">
+    <h2>Игроки</h2>
+    <div id="players" class="players"></div>
+    <div class="add-form">
+      <input id="newPlayerName" placeholder="Имя нового игрока" />
+      <button id="addPlayerBtn">Добавить</button>
+    </div>
+    <div id="playerInfo" class="info muted">Игрок не выбран</div>
+
+    <div class="actions">
+      <button id="startPauseBtn" class="btn primary">Старт</button>
+      <button id="resetBtn" class="btn">Сбросить поле</button>
+    </div>
+
+    <div class="legend">
+      - Очки: 50 × уровень за каждого пришельца.<br/>
+      - Сложность растёт по уровню: скорость волны, частота огня врагов, КД игрока, число рядов.<br/>
+      - Прогресс (уровень) хранится в браузере на игрока. Очки уровня обнуляются при переходе на следующий.
+    </div>
+
+    <div id="status" class="status">Выберите игрока или создайте нового, затем нажмите «Старт».</div>
+  </div>
+</div>
+
+<!-- Модалка -->
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-content">
+    <h3 id="modalTitle">Уровень пройден</h3>
+    <p id="modalText">Описание</p>
+    <div class="modal-actions">
+      <button id="modalOk" class="btn primary">ОК</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- Константы поля ---
+const WIDTH = 800, HEIGHT = 600;
+const MAX_LEVEL = 10;
+
+// --- Хранилище ---
+const STORAGE_KEY = 'invaders_state';
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { players: [], currentPlayerName: '' };
+    const s = JSON.parse(raw);
+    if (!Array.isArray(s.players)) s.players = [];
+    if (typeof s.currentPlayerName !== 'string') s.currentPlayerName = '';
+    return s;
+  } catch (_) {
+    return { players: [], currentPlayerName: '' };
+  }
+}
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+// --- Глобальное состояние ---
+let state = loadState();
+
+// DOM
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const playersWrap = document.getElementById('players');
+const newPlayerName = document.getElementById('newPlayerName');
+const addPlayerBtn = document.getElementById('addPlayerBtn');
+const playerInfo = document.getElementById('playerInfo');
+const startPauseBtn = document.getElementById('startPauseBtn');
+const resetBtn = document.getElementById('resetBtn');
+const statusEl = document.getElementById('status');
+
+const hudPlayer = document.getElementById('hudPlayer');
+const hudLevel  = document.getElementById('hudLevel');
+const hudScore  = document.getElementById('hudScore');
+const hudLives  = document.getElementById('hudLives');
+const hudAliens = document.getElementById('hudAliens');
+const hudFire   = document.getElementById('hudFire');
+const hudEnemyRate = document.getElementById('hudEnemyRate');
+
+// Модалка
+const modal = document.getElementById('modal');
+const modalTitle = document.getElementById('modalTitle');
+const modalText = document.getElementById('modalText');
+const modalOk = document.getElementById('modalOk');
+modalOk.onclick = function(){ closeModal(); };
+
+// --- Игроки ---
+function currentPlayer() {
+  if (!state.currentPlayerName) return null;
+  return state.players.find(p => p.name === state.currentPlayerName) || null;
+}
+function ensurePlayerDefaults(p) {
+  if (typeof p.level !== 'number' || p.level < 1) p.level = 1;
+  if (typeof p.score !== 'number' || p.score < 0) p.score = 0;
+  if (typeof p.completed !== 'boolean') p.completed = false;
+  if (p.level > MAX_LEVEL) p.level = MAX_LEVEL;
+}
+function renderPlayers() {
+  playersWrap.innerHTML = '';
+  state.players.forEach(p => {
+    ensurePlayerDefaults(p);
+    const btn = document.createElement('button');
+    btn.className = 'player-btn' + (p.name === state.currentPlayerName ? ' active' : '');
+    btn.textContent = p.name;
+    btn.title = 'Уровень: ' + p.level + (p.completed ? ' (пройдено)' : '') + ', Очки (ур.): ' + p.score;
+    btn.onclick = function() {
+      selectPlayer(p.name);
+      updateInfo();
+      prepareLevel();
+    };
+    playersWrap.appendChild(btn);
+  });
+  if (!state.players.length) {
+    const div = document.createElement('div');
+    div.className = 'muted';
+    div.textContent = 'Пока нет игроков. Создайте нового.';
+    playersWrap.appendChild(div);
+  }
+  updateInfo();
+}
+function selectPlayer(name) {
+  state.currentPlayerName = name;
+  let p = state.players.find(x => x.name === name);
+  if (!p) {
+    p = { name: name, level: 1, score: 0, completed: false };
+    state.players.push(p);
+  }
+  ensurePlayerDefaults(p);
+  saveState();
+  renderPlayers();
+}
+function addPlayer() {
+  const name = (newPlayerName.value || '').trim();
+  if (!name) { setStatus('Введите имя игрока', true); return; }
+  if (state.players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+    setStatus('Такой игрок уже существует', true);
+    return;
+  }
+  state.players.push({ name: name, level: 1, score: 0, completed: false });
+  state.currentPlayerName = name;
+  saveState();
+  newPlayerName.value = '';
+  renderPlayers();
+  prepareLevel();
+  setStatus('Игрок ' + name + ' создан. Нажмите «Старт».');
+}
+function updateInfo() {
+  const p = currentPlayer();
+  if (!p) {
+    playerInfo.textContent = 'Игрок не выбран';
+    hudPlayer.textContent = 'Игрок: —';
+    updateStartButton();
+    return;
+  }
+  ensurePlayerDefaults(p);
+  const cd = playerFireCooldownForLevel(p.level);
+  const enemyRate = enemyShootIntervalForLevel(p.level);
+  playerInfo.textContent = 'Игрок: ' + p.name + (p.completed ? ' (Игра пройдена)' : '') +
+                           ' — Уровень: ' + p.level + '/' + MAX_LEVEL +
+                           ', Очки (ур.): ' + p.score +
+                           ', КД: ' + Math.round(cd*1000) + 'мс, Огонь врагов: ' + enemyRate[0] + '-' + enemyRate[1] + 'с';
+  hudPlayer.textContent = 'Игрок: ' + p.name;
+  hudLevel.textContent  = 'Уровень: ' + p.level + '/' + MAX_LEVEL;
+  hudScore.textContent  = 'Очки: ' + p.score;
+  hudFire.textContent   = 'КД выстрела: ' + Math.round(cd*1000) + 'мс';
+  hudEnemyRate.textContent = 'Скорость огня врага: ' + enemyRate[0] + '-' + enemyRate[1] + 'с';
+  updateStartButton();
+}
+function updateStartButton() {
+  const p = currentPlayer();
+  if (running) { startPauseBtn.textContent = 'Пауза'; startPauseBtn.disabled = false; return; }
+  if (!p) { startPauseBtn.textContent = 'Старт'; startPauseBtn.disabled = false; return; }
+  if (p.completed) { startPauseBtn.textContent = 'Игра пройдена'; startPauseBtn.disabled = true; return; }
+  startPauseBtn.textContent = 'Старт: Уровень ' + p.level;
+  startPauseBtn.disabled = false;
+}
+function setStatus(msg, isError) {
+  statusEl.textContent = msg;
+  statusEl.style.color = isError ? '#b30000' : '#222';
+}
+
+// --- Сложность по уровню ---
+function rowsForLevel(lvl) {
+  // 4..9 рядов
+  return 4 + Math.floor((clampLevel(lvl) - 1) * (5 / 9));
+}
+function alienSpeedForLevel(lvl) {
+  // 40..140 пикс/с по горизонтали
+  const t = (clampLevel(lvl) - 1) / (MAX_LEVEL - 1);
+  return 40 + t * (140 - 40);
+}
+function stepDownForLevel(lvl) {
+  // 18..28 пикс вниз
+  const t = (clampLevel(lvl) - 1) / (MAX_LEVEL - 1);
+  return Math.round(18 + t * (28 - 18));
+}
+function enemyShootIntervalForLevel(lvl) {
+  // Мин..Макс интервал между выстрелами волны, секунды: от 2.2-3.2 до 0.6-1.0
+  const t = (clampLevel(lvl) - 1) / (MAX_LEVEL - 1);
+  const min = 2.2 + (0.6 - 2.2) * t; // 2.2 -> 0.6
+  const max = 3.2 + (1.0 - 3.2) * t; // 3.2 -> 1.0
+  return [Number(min.toFixed(2)), Number(max.toFixed(2))];
+}
+function playerFireCooldownForLevel(lvl) {
+  // 0.35с -> 0.16с
+  const t = (clampLevel(lvl) - 1) / (MAX_LEVEL - 1);
+  return 0.35 + (0.16 - 0.35) * t;
+}
+function clampLevel(lvl){ return Math.max(1, Math.min(lvl, MAX_LEVEL)); }
+
+// --- Игровые переменные ---
+let running = false;
+let animationId = null;
+let lastTime = 0;
+
+let player;
+let lives = 3;
+let playerCooldown = 0;
+
+let aliens = [];       // {x,y,w,h, alive, col, row}
+let aliensAlive = 0;
+let alienDir = 1;      // 1 → вправо, -1 → влево
+let alienSpeed = 60;   // пикс/с
+let alienStepDown = 20;
+let alienBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+
+let playerBullets = []; // {x,y,w,h, vy}
+let alienBullets = [];  // {x,y,w,h, vy}
+let enemyShootTimer = 0;
+
+// --- HUD обновление ---
+function updateHUDCounts() {
+  hudLives.textContent = 'Жизни: ' + lives;
+  hudAliens.textContent = 'Пришельцы: ' + aliensAlive;
+}
+
+// --- Подготовка уровня ---
+function prepareLevel() {
+  const p = currentPlayer();
+  if (p) ensurePlayerDefaults(p);
+
+  // Параметры уровня
+  const lvl = p ? p.level : 1;
+  alienSpeed = alienSpeedForLevel(lvl);
+  alienStepDown = stepDownForLevel(lvl);
+  const [minRate, maxRate] = enemyShootIntervalForLevel(lvl);
+  enemyShootTimer = randFloat(minRate, maxRate);
+  playerCooldown = 0;
+
+  // Игрок
+  lives = 3;
+  player = {
+    w: 60, h: 16,
+    x: (WIDTH - 60) / 2,
+    y: HEIGHT - 40,
+    speed: 360 // пикс/с
+  };
+
+  // Очки уровня
+  if (p) p.score = 0;
+
+  // Снаряды
+  playerBullets = [];
+  alienBullets = [];
+
+  // Волна пришельцев
+  buildAliens();
+
+  // HUD
+  updateInfo();
+  updateHUDCounts();
+  hudScore.textContent = 'Очки: ' + (p ? p.score : 0);
+  const cd = playerFireCooldownForLevel(lvl);
+  const er = enemyShootIntervalForLevel(lvl);
+  hudFire.textContent = 'КД выстрела: ' + Math.round(cd*1000) + 'мс';
+  hudEnemyRate.textContent = 'Скорость огня врага: ' + er[0] + '-' + er[1] + 'с';
+
+  draw();
+}
+
+// Построение волны
+function buildAliens() {
+  aliens = [];
+  const cols = 10;
+  const rows = rowsForLevel(level());
+  const marginTop = 60;
+  const marginLeft = 60;
+  const hSpacing = 16;
+  const vSpacing = 18;
+  const w = 36, h = 24;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const x = marginLeft + c * (w + hSpacing);
+      const y = marginTop + r * (h + vSpacing);
+      aliens.push({ x, y, w, h, alive: true, col: c, row: r });
+    }
+  }
+  aliensAlive = aliens.length;
+  alienDir = 1;
+  recomputeAlienBounds();
+}
+
+function recomputeAlienBounds() {
+  const alive = aliens.filter(a => a.alive);
+  if (alive.length === 0) {
+    alienBounds = { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+    return;
+  }
+  const minX = Math.min(...alive.map(a => a.x));
+  const maxX = Math.max(...alive.map(a => a.x + a.w));
+  const minY = Math.min(...alive.map(a => a.y));
+  const maxY = Math.max(...alive.map(a => a.y + a.h));
+  alienBounds = { minX, maxX, minY, maxY };
+  hudAliens.textContent = 'Пришельцы: ' + alive.length;
+}
+
+// --- Старт/Пауза/Сброс ---
+function startOrPause() {
+  const p = currentPlayer();
+  if (!p) { setStatus('Сначала выберите игрока или создайте нового', true); return; }
+  if (p.completed) { setStatus('Игра уже пройдена.', true); return; }
+
+  if (!running) {
+    if (!aliens || !aliens.length) prepareLevel();
+    running = true;
+    lastTime = performance.now();
+    animationId = requestAnimationFrame(loop);
+    setStatus('Уровень ' + p.level + ' начат. Уничтожьте всех пришельцев.');
+  } else {
+    running = false;
+    if (animationId) cancelAnimationFrame(animationId);
+    setStatus('Пауза.');
+  }
+  updateStartButton();
+}
+function resetField() {
+  running = false;
+  if (animationId) cancelAnimationFrame(animationId);
+  prepareLevel();
+  setStatus('Поле сброшено. Нажмите «Старт».');
+  updateStartButton();
+}
+
+// --- Игра/цикл ---
+const keyState = { left: false, right: false, fire: false };
+
+function loop(time) {
+  const dt = Math.min(0.03, (time - lastTime) / 1000);
+  lastTime = time;
+
+  update(dt);
+  draw();
+
+  if (running) animationId = requestAnimationFrame(loop);
+}
+
+function update(dt) {
+  const p = currentPlayer();
+  if (!p) return;
+
+  // Движение игрока
+  if (keyState.left) player.x -= player.speed * dt;
+  if (keyState.right) player.x += player.speed * dt;
+  player.x = Math.max(10, Math.min(WIDTH - player.w - 10, player.x));
+
+  // Стрельба игрока
+  if (playerCooldown > 0) playerCooldown -= dt;
+  if (keyState.fire && playerCooldown <= 0) {
+    firePlayer();
+    playerCooldown = playerFireCooldownForLevel(p.level);
+  }
+
+  // Движение волны
+  moveAliens(dt);
+
+  // Выстрел врагов
+  enemyShootTimer -= dt;
+  if (enemyShootTimer <= 0) {
+    fireEnemy();
+    const [minRate, maxRate] = enemyShootIntervalForLevel(p.level);
+    enemyShootTimer = randFloat(minRate, maxRate);
+  }
+
+  // Пули игрока
+  for (const b of playerBullets) {
+    b.y += b.vy * dt;
+  }
+  // Пули врагов
+  for (const b of alienBullets) {
+    b.y += b.vy * dt;
+  }
+
+  // Столкновения: пули игрока vs пришельцы
+  for (const bullet of playerBullets) {
+    if (!bullet.active) continue;
+    for (const a of aliens) {
+      if (!a.alive) continue;
+      if (rectsIntersect(bullet, a)) {
+        a.alive = false;
+        bullet.active = false;
+        aliensAlive--;
+        // Очки
+        addScore(50 * p.level);
+        recomputeAlienBounds();
+        // Победа?
+        if (aliensAlive <= 0) {
+          levelUpOrFinish();
+          return;
+        }
+        break;
+      }
+    }
+  }
+
+  // Столкновения: пули врага vs игрок
+  for (const bullet of alienBullets) {
+    if (!bullet.active) continue;
+    if (rectsIntersect(bullet, playerRect())) {
+      bullet.active = false;
+      loseLife();
+      if (lives <= 0) return; // gameOver уже обработан
+      break;
+    }
+  }
+
+  // Пришельцы дошли до низа?
+  if (alienBounds.maxY >= player.y - 8) {
+    loseLife();
+    if (lives <= 0) return;
+  }
+
+  // Чистим неактивные/вышедшие за экран пули
+  playerBullets = playerBullets.filter(b => b.active && b.y + b.h >= 0);
+  alienBullets  = alienBullets.filter(b => b.active && b.y <= HEIGHT + b.h);
+}
+
+// Движение волны с отскоком и шагом вниз
+function moveAliens(dt) {
+  if (aliensAlive <= 0) return;
+  let dx = alienDir * alienSpeed * dt;
+
+  // Проверим достижение края: прогноз по краю волны
+  const nextMinX = alienBounds.minX + dx;
+  const nextMaxX = alienBounds.maxX + dx;
+  const leftLimit = 10, rightLimit = WIDTH - 10;
+
+  if (nextMinX < leftLimit || nextMaxX > rightLimit) {
+    // Нужен шаг вниз и смена направления + небольшое ускорение
+    for (const a of aliens) {
+      if (!a.alive) continue;
+      a.y += alienStepDown;
+    }
+    alienDir *= -1;
+    alienSpeed *= 1.05; // лёгкий разгон
+    recomputeAlienBounds();
+  } else {
+    // Сдвиг горизонтально
+    for (const a of aliens) {
+      if (!a.alive) continue;
+      a.x += dx;
+    }
+    alienBounds.minX += dx;
+    alienBounds.maxX += dx;
+  }
+}
+
+// Стрельба игрока
+function firePlayer() {
+  const bulletW = 4, bulletH = 10;
+  const bx = player.x + player.w / 2 - bulletW / 2;
+  const by = player.y - bulletH;
+  playerBullets.push({ x: bx, y: by, w: bulletW, h: bulletH, vy: -520, active: true });
+}
+
+// Стрельба врага — стреляет нижний живой в случайной колонке
+function fireEnemy() {
+  const columns = new Map(); // col -> [aliens in column]
+  for (const a of aliens) {
+    if (!a.alive) continue;
+    if (!columns.has(a.col)) columns.set(a.col, []);
+    columns.get(a.col).push(a);
+  }
+  if (columns.size === 0) return;
+  const cols = Array.from(columns.keys());
+  const col = cols[Math.floor(Math.random() * cols.length)];
+  const candidates = columns.get(col).sort((a,b) => b.y - a.y); // низший вперёд
+  const shooter = candidates[0];
+  const bulletW = 4, bulletH = 10;
+  const bx = shooter.x + shooter.w / 2 - bulletW / 2;
+  const by = shooter.y + shooter.h + 2;
+  alienBullets.push({ x: bx, y: by, w: bulletW, h: bulletH, vy: 260 + Math.random()*80, active: true });
+}
+
+// Потеря жизни
+function loseLife() {
+  lives -= 1;
+  updateHUDCounts();
+  if (lives <= 0) {
+    gameOver();
+  } else {
+    // Респавн игрока и очистка вражеских пуль
+    player.x = (WIDTH - player.w) / 2;
+    playerBullets = [];
+    alienBullets = [];
+    setStatus('Вы получили урон. Осталось жизней: ' + lives);
+  }
+}
+
+// Добавление очков
+function addScore(inc) {
+  const p = currentPlayer();
+  if (!p) return;
+  p.score += inc;
+  hudScore.textContent = 'Очки: ' + p.score;
+  saveState();
+}
+
+// Финал уровня или игры
+function levelUpOrFinish() {
+  running = false;
+  if (animationId) cancelAnimationFrame(animationId);
+
+  const p = currentPlayer();
+  if (!p) return;
+
+  if (p.level < MAX_LEVEL) {
+    const completedLevel = p.level;
+    p.level += 1;
+    p.score = 0;
+    saveState();
+    updateInfo();
+    showModal('Уровень ' + completedLevel + ' пройден!',
+      'Все пришельцы уничтожены. Нажмите «ОК», затем «Старт: Уровень ' + p.level + '».');
+    setStatus('Готовы к уровню ' + p.level + '. Сложность увеличена.');
+  } else {
+    p.completed = true;
+    saveState();
+    updateInfo();
+    showModal('Игра пройдена!', 'Поздравляем! Вы прошли все 10 уровней.');
+    setStatus('Игра пройдена. Великолепно!');
+  }
+  updateStartButton();
+}
+
+// Поражение
+function gameOver() {
+  running = false;
+  if (animationId) cancelAnimationFrame(animationId);
+  setStatus('Поражение: корабль уничтожен или волна дошла до вас. Нажмите «Сбросить поле» или «Старт», чтобы попробовать снова.', true);
+  updateStartButton();
+}
+
+// Прямоугольники для коллизий
+function rectsIntersect(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+function playerRect() {
+  return { x: player.x, y: player.y, w: player.w, h: player.h };
+}
+
+// Рендер
+function draw() {
+  // фон
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  // звёздное небо
+  drawStars();
+
+  // игрок
+  drawPlayer();
+
+  // пришельцы
+  drawAliens();
+
+  // пули
+  drawBullets();
+
+  // нижняя полоса HUD
+  drawHUDOverlay();
+}
+
+function drawStars() {
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  ctx.fillStyle = '#111';
+  for (let i = 0; i < 60; i++) {
+    const x = (i * 127) % WIDTH;
+    const y = (i * 89) % HEIGHT;
+    ctx.fillRect(x, y, 2, 2);
+  }
+  ctx.fillStyle = '#333';
+  for (let i = 0; i < 40; i++) {
+    const x = (i * 73) % WIDTH;
+    const y = (i * 41) % HEIGHT;
+    ctx.fillRect(x, y, 1, 1);
+  }
+}
+
+function drawPlayer() {
+  // корпус
+  ctx.fillStyle = '#8bc34a';
+  ctx.fillRect(Math.round(player.x) + 0.5, player.y + 0.5, player.w, player.h);
+  // башенка
+  ctx.fillRect(Math.round(player.x + player.w/2 - 6) + 0.5, player.y - 8 + 0.5, 12, 8);
+  ctx.strokeStyle = '#2e7d32';
+  ctx.strokeRect(Math.round(player.x) + 0.5, player.y + 0.5, player.w, player.h);
+}
+
+function drawAliens() {
+  for (const a of aliens) {
+    if (!a.alive) continue;
+    // простой пиксель-арт пришельца
+    const x = Math.round(a.x) + 0.5, y = Math.round(a.y) + 0.5;
+    ctx.fillStyle = '#ffeb3b';
+    ctx.fillRect(x, y, a.w, a.h);
+    ctx.fillStyle = '#795548';
+    ctx.fillRect(x + 6, y + 6, a.w - 12, 4);
+    ctx.strokeStyle = '#bdbdbd';
+    ctx.strokeRect(x, y, a.w, a.h);
+  }
+}
+
+function drawBullets() {
+  ctx.fillStyle = '#e0f7fa';
+  for (const b of playerBullets) {
+    if (!b.active) continue;
+    ctx.fillRect(Math.round(b.x) + 0.5, Math.round(b.y) + 0.5, b.w, b.h);
+  }
+  ctx.fillStyle = '#f44336';
+  for (const b of alienBullets) {
+    if (!b.active) continue;
+    ctx.fillRect(Math.round(b.x) + 0.5, Math.round(b.y) + 0.5, b.w, b.h);
+  }
+}
+
+function drawHUDOverlay() {
+  const p = currentPlayer();
+  if (!p) return;
+  ctx.fillStyle = '#fff';
+  ctx.font = '14px Arial';
+  const text = 'Игрок: ' + p.name +
+    ' | Уровень: ' + p.level + '/' + MAX_LEVEL +
+    ' | Очки: ' + p.score +
+    ' | Жизни: ' + lives +
+    ' | Пришельцы: ' + aliensAlive;
+  ctx.fillText(text, 12, HEIGHT - 12);
+}
+
+// Утилиты
+function randFloat(min, max) {
+  return min + Math.random() * (max - min);
+}
+
+// Ввод
+function onKeyDown(e) {
+  const code = e.code || e.key;
+  if (code === 'ArrowLeft' || code === 'KeyA') { keyState.left = true; e.preventDefault(); }
+  else if (code === 'ArrowRight' || code === 'KeyD') { keyState.right = true; e.preventDefault(); }
+  else if (code === 'Space') {
+    const p = currentPlayer();
+    if (!running) {
+      startOrPause(); // старт
+    } else {
+      // огонь
+      keyState.fire = true;
+    }
+    e.preventDefault();
+  } else if (code === 'KeyP') {
+    startOrPause(); e.preventDefault();
+  }
+}
+function onKeyUp(e) {
+  const code = e.code || e.key;
+  if (code === 'ArrowLeft' || code === 'KeyA') { keyState.left = false; }
+  else if (code === 'ArrowRight' || code === 'KeyD') { keyState.right = false; }
+  else if (code === 'Space') { keyState.fire = false; }
+}
+
+// Модалка
+function showModal(title, text) {
+  modalTitle.textContent = title;
+  modalText.textContent = text;
+  modal.classList.add('open');
+}
+function closeModal() {
+  modal.classList.remove('open');
+}
+
+// Инициализация
+function init() {
+  renderPlayers();
+  prepareLevel();
+
+  addPlayerBtn.onclick = addPlayer;
+  startPauseBtn.onclick = startOrPause;
+  resetBtn.onclick = resetField;
+  document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('keyup', onKeyUp);
+
+  setStatus('Выберите игрока или создайте нового, затем нажмите «Старт».');
+  updateStartButton();
+}
+window.addEventListener('load', init);
+
+function level() {
+  const p = currentPlayer();
+  return p ? p.level : 1;
+}
+</script>
+</body>
+</html>

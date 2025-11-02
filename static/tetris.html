@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Тетрис — 10 уровней</title>
+<style>
+body { 
+  font-family: Arial, sans-serif; 
+  max-width: 1200px; 
+  margin: 20px auto; 
+  padding: 0 16px; 
+  background: #2a2a2a;  /* тёмный фон страницы */
+  color: #eaeaea;        /* светлый текст по умолчанию */
+}
+h1 { margin: 0 0 12px; }
+.row { display: flex; gap: 24px; flex-wrap: wrap; }
+
+.game-panel { flex: 1 1 640px; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background: #fff; }
+.game-panel h2 { margin: 0 0 10px; font-size: 18px; }
+.legend { margin-top: 8px; font-size: 14px; color: #555; }
+
+.board-wrap { display: flex; gap: 16px; align-items: flex-start; }
+canvas { border: 1px solid #ccc; background: #111; display: block; border-radius: 6px; }
+.preview { display: flex; flex-direction: column; gap: 8px; }
+.preview h3 { margin: 0; font-size: 14px; color: #444; }
+
+.hud { margin: 10px 0 0; display: flex; gap: 16px; flex-wrap: wrap; color: #444; }
+
+.panel { flex: 0 0 320px; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background: #fafafa; }
+.panel h2 { margin: 0 0 10px; font-size: 18px; }
+.players { display: flex; flex-wrap: wrap; gap: 8px; }
+.player-btn { padding: 6px 10px; border: 1px solid #999; border-radius: 6px; background: #fff; cursor: pointer; }
+.player-btn:hover { background: #f0f0f0; }
+.player-btn.active { background: #007cba; color: #fff; border-color: #007cba; }
+.add-form { display: flex; gap: 8px; margin-top: 8px; }
+.add-form input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
+.add-form button { padding: 8px 12px; background: #007cba; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.add-form button:hover { background: #005a87; }
+.info { margin-top: 10px; font-size: 14px; color: #444; }
+.actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { padding: 8px 12px; border-radius: 6px; cursor: pointer; border: 1px solid #ccc; background: #eee; }
+.btn:hover { background: #e0e0e0; }
+.btn.primary { background: #28a745; color: #fff; border: none; }
+.btn.primary:hover { background: #1e7e34; }
+.btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+.status { margin-top: 8px; padding: 8px; background: #eef6ff; border: 1px solid #cfe2ff; border-radius: 6px; min-height: 20px; }
+.muted { color: #777; }
+
+/* Модалка */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 1000; }
+.modal.open { display: flex; }
+.modal-content { width: 90%; max-width: 420px; background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+.modal-content h3 { margin: 0 0 10px; }
+.modal-content p { margin: 0 0 16px; color: #444; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.modal-actions .btn { min-width: 100px; }
+
+.nav { margin: 8px 0 16px; }
+.nav a { color: #007cba; text-decoration: none; }
+.nav a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="nav"><a href="/">← Выбор игры</a></div>
+<h1>Тетрис — 10 уровней</h1>
+
+<div class="row">
+  <!-- Поле слева -->
+  <div class="game-panel">
+    <h2>Поле 10×20</h2>
+    <div class="board-wrap">
+      <canvas id="game" width="300" height="600"></canvas>
+      <div class="preview">
+        <h3>Следующая фигура</h3>
+        <canvas id="next" width="120" height="120"></canvas>
+        <div class="legend">Управление:<br/>←/→ — сдвиг, ↓ — шаг вниз, ↑ — поворот по часовой, Z — против часовой, Space — уронить.</div>
+      </div>
+    </div>
+    <div class="hud">
+      <div id="hudPlayer">Игрок: —</div>
+      <div id="hudLevel">Уровень: 1/10</div>
+      <div id="hudScore">Очки: 0</div>
+      <div id="hudTarget">Цель: 1000</div>
+      <div id="hudSpeed">Скорость: 800мс</div>
+    </div>
+  </div>
+
+  <!-- Настройки справа -->
+  <div class="panel">
+    <h2>Игроки</h2>
+    <div id="players" class="players"></div>
+    <div class="add-form">
+      <input id="newPlayerName" placeholder="Имя нового игрока" />
+      <button id="addPlayerBtn">Добавить</button>
+    </div>
+    <div id="playerInfo" class="info muted">Игрок не выбран</div>
+
+    <div class="actions">
+      <button id="startPauseBtn" class="btn primary">Старт</button>
+      <button id="resetBtn" class="btn">Сбросить поле</button>
+    </div>
+
+    <div class="legend">
+      - Очки за линии: 1/2/3/4 — 100/300/500/800 × текущий уровень.<br/>
+      - Цель уровня: 1000 × номер уровня. Достигли — следующий уровень и быстрее падение.<br/>
+      - Прогресс хранится в браузере.
+    </div>
+
+    <div id="status" class="status">Выберите игрока или создайте нового, затем нажмите «Старт».</div>
+  </div>
+</div>
+
+<!-- Модалка -->
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-content">
+    <h3 id="modalTitle">Уровень пройден</h3>
+    <p id="modalText">Описание</p>
+    <div class="modal-actions">
+      <button id="modalOk" class="btn primary">ОК</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- Константы поля ---
+const COLS = 10, ROWS = 20, CELL = 30; // canvas 300×600
+const MAX_LEVEL = 10;
+
+// --- Хранилище ---
+const STORAGE_KEY = 'tetris_state';
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { players: [], currentPlayerName: '' };
+    const s = JSON.parse(raw);
+    if (!Array.isArray(s.players)) s.players = [];
+    if (typeof s.currentPlayerName !== 'string') s.currentPlayerName = '';
+    return s;
+  } catch (_) {
+    return { players: [], currentPlayerName: '' };
+  }
+}
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+// --- Глобальное состояние ---
+let state = loadState();
+
+// DOM
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const nextCanvas = document.getElementById('next');
+const nextCtx = nextCanvas.getContext('2d');
+
+const playersWrap = document.getElementById('players');
+const newPlayerName = document.getElementById('newPlayerName');
+const addPlayerBtn = document.getElementById('addPlayerBtn');
+const playerInfo = document.getElementById('playerInfo');
+const startPauseBtn = document.getElementById('startPauseBtn');
+const resetBtn = document.getElementById('resetBtn');
+const statusEl = document.getElementById('status');
+
+const hudPlayer = document.getElementById('hudPlayer');
+const hudLevel  = document.getElementById('hudLevel');
+const hudScore  = document.getElementById('hudScore');
+const hudTarget = document.getElementById('hudTarget');
+const hudSpeed  = document.getElementById('hudSpeed');
+
+// Модалка
+const modal = document.getElementById('modal');
+const modalTitle = document.getElementById('modalTitle');
+const modalText = document.getElementById('modalText');
+const modalOk = document.getElementById('modalOk');
+modalOk.onclick = function(){ closeModal(); };
+
+// --- Игровые переменные ---
+let board = []; // ROWS x COLS, 0 или id цвета
+let running = false;
+let level = 1;
+let score = 0; // очки внутри уровня
+let dropInterval = 800; // мс между падениями
+let lastTime = 0;
+let acc = 0;
+let animationId = null;
+
+// Текущая и следующая фигуры
+let cur = null;  // {matrix, x, y, id}
+let next = null;
+
+
+// --- Аудио (WebAudio): музыка + SFX ---
+const AudioT = (() => {
+  let ctx = null;
+  let master = null, musicGain = null, sfxGain = null;
+  let musicTimer = null;
+  let playing = false;
+  let currentNote = null;
+
+  function init() {
+    if (ctx) return true;
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain();
+      master.gain.value = 0.18;
+      musicGain = ctx.createGain();
+      musicGain.gain.value = 0.06;
+      sfxGain = ctx.createGain();
+      sfxGain.gain.value = 0.22;
+      musicGain.connect(master);
+      sfxGain.connect(master);
+      master.connect(ctx.destination);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+  function resume() { if (ctx && ctx.state === 'suspended') ctx.resume(); }
+  function stopCurrentNote() {
+    if (currentNote) {
+      try { currentNote.osc.stop(); } catch(_) {}
+      currentNote = null;
+    }
+  }
+
+  // Универсальный короткий тон (для SFX)
+  function sfxTone(freq=440, dur=0.08, type='square', vol=1.0) {
+    if (!ctx) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.value = Math.max(0.0001, vol);
+    o.connect(g).connect(sfxGain);
+    const now = ctx.currentTime;
+    g.gain.setValueAtTime(g.gain.value, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    o.start(now);
+    o.stop(now + dur + 0.02);
+  }
+
+  // SFX
+  function turn() { sfxTone(820, 0.05, 'square', 0.9); }
+  function lock() { 
+    if (!ctx) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'triangle';
+    const now = ctx.currentTime;
+    o.frequency.setValueAtTime(180, now);
+    o.frequency.exponentialRampToValueAtTime(120, now + 0.09);
+    g.gain.value = 0.7;
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+    o.connect(g).connect(sfxGain);
+    o.start(now); o.stop(now + 0.12);
+  }
+  function clear(lines=1) {
+    const base = 520;
+    for (let i=0;i<lines;i++){
+      setTimeout(()=> {
+        sfxTone(base + i*80, 0.07, 'square', 0.9);
+        setTimeout(()=> sfxTone(base + i*80 + 120, 0.07, 'square', 0.9), 55);
+        setTimeout(()=> sfxTone(base + i*80 + 220, 0.08, 'square', 0.9), 110);
+      }, i*140);
+    }
+  }
+  function gameOver() {
+    if (!ctx) return;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sawtooth';
+    const now = ctx.currentTime;
+    o.frequency.setValueAtTime(700, now);
+    o.frequency.exponentialRampToValueAtTime(120, now + 1.0);
+    g.gain.value = 0.9;
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
+    o.connect(g).connect(sfxGain);
+    o.start(now); o.stop(now + 1.05);
+  }
+
+  // Музыка: простая циклическая мелодия
+  const MELODY = [
+    {f:523,d:0.5},{f:659,d:0.5},{f:784,d:0.5},{f:659,d:0.5},
+    {f:587,d:0.5},{f:698,d:0.5},{f:880,d:0.5},{f:698,d:0.5},
+    {f:659,d:0.5},{f:523,d:0.5},{f:392,d:0.75},{f:0,d:0.25}
+  ];
+  const TEMPO = 138; // BPM
+  const BEAT = 60 / TEMPO; // сек за четверть
+  function playNote(freq, beats) {
+    if (!ctx) return;
+    stopCurrentNote();
+    if (freq <= 0) { currentNote = null; return; }
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.value = freq;
+    const now = ctx.currentTime;
+    const dur = Math.max(0.1, beats * BEAT);
+    g.gain.value = 0.0001;
+    g.gain.exponentialRampToValueAtTime(0.08, now + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+    o.connect(g).connect(musicGain);
+    o.start(now);
+    o.stop(now + dur + 0.02);
+    currentNote = { osc: o };
+  }
+  function loop(i=0) {
+    if (!playing) return;
+    const n = MELODY[i % MELODY.length];
+    playNote(n.f, n.d);
+    const wait = Math.max(80, n.d * BEAT * 1000);
+    musicTimer = setTimeout(() => loop((i+1) % MELODY.length), wait);
+  }
+  function startMusic() {
+    if (!ctx) return;
+    if (playing) return;
+    playing = true;
+    loop(0);
+  }
+  function pauseMusic() {
+    playing = false;
+    if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; }
+    stopCurrentNote();
+  }
+  function stopMusic() { pauseMusic(); }
+
+  return { init, resume, startMusic, pauseMusic, stopMusic, turn, lock, clear, gameOver };
+})();
+
+// --- Конфигурация уровня ---
+function targetScoreForLevel(lvl) {
+  return 1000 * Math.max(1, Math.min(lvl, MAX_LEVEL));
+}
+function speedForLevel(lvl) {
+  // 800мс (ур.1) -> 120мс (ур.10)
+  const max = 800, min = 120;
+  const t = (lvl - 1) / (MAX_LEVEL - 1);
+  return Math.round(max - t * (max - min));
+}
+
+// --- Игроки ---
+function currentPlayer() {
+  if (!state.currentPlayerName) return null;
+  return state.players.find(p => p.name === state.currentPlayerName) || null;
+}
+function ensurePlayerDefaults(p) {
+  if (typeof p.level !== 'number' || p.level < 1) p.level = 1;
+  if (typeof p.score !== 'number' || p.score < 0) p.score = 0;
+  if (typeof p.completed !== 'boolean') p.completed = false;
+  if (p.level > MAX_LEVEL) p.level = MAX_LEVEL;
+  const tgt = targetScoreForLevel(p.level);
+  if (p.score > tgt) p.score = tgt;
+}
+function renderPlayers() {
+  playersWrap.innerHTML = '';
+  state.players.forEach(p => {
+    ensurePlayerDefaults(p);
+    const btn = document.createElement('button');
+    btn.className = 'player-btn' + (p.name === state.currentPlayerName ? ' active' : '');
+    const tgt = targetScoreForLevel(p.level);
+    btn.textContent = p.name;
+    btn.title = 'Уровень: ' + p.level + (p.completed ? ' (пройдено)' : '') + ', Очки: ' + p.score + '/' + tgt;
+    btn.onclick = function() {
+      selectPlayer(p.name);
+      updateInfo();
+      prepareBoard();
+    };
+    playersWrap.appendChild(btn);
+  });
+  if (!state.players.length) {
+    const div = document.createElement('div');
+    div.className = 'muted';
+    div.textContent = 'Пока нет игроков. Создайте нового.';
+    playersWrap.appendChild(div);
+  }
+  updateInfo();
+}
+function selectPlayer(name) {
+  state.currentPlayerName = name;
+  let p = state.players.find(x => x.name === name);
+  if (!p) {
+    p = { name: name, level: 1, score: 0, completed: false };
+    state.players.push(p);
+  }
+  ensurePlayerDefaults(p);
+  saveState();
+  renderPlayers();
+}
+function addPlayer() {
+  const name = (newPlayerName.value || '').trim();
+  if (!name) { setStatus('Введите имя игрока', true); return; }
+  if (state.players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+    setStatus('Такой игрок уже существует', true);
+    return;
+  }
+  state.players.push({ name: name, level: 1, score: 0, completed: false });
+  state.currentPlayerName = name;
+  saveState();
+  newPlayerName.value = '';
+  renderPlayers();
+  prepareBoard();
+  setStatus('Игрок ' + name + ' создан. Нажмите «Старт».');
+}
+function updateInfo() {
+  const p = currentPlayer();
+  if (!p) {
+    playerInfo.textContent = 'Игрок не выбран';
+    hudPlayer.textContent = 'Игрок: —';
+    updateStartButton();
+    return;
+  }
+  ensurePlayerDefaults(p);
+  const tgt = targetScoreForLevel(p.level);
+  const spd = speedForLevel(p.level);
+  playerInfo.textContent = 'Игрок: ' + p.name + (p.completed ? ' (Игра пройдена)' : '') +
+                           ' — Уровень: ' + p.level + '/' + MAX_LEVEL +
+                           ', Очки: ' + p.score + '/' + tgt +
+                           ', Скорость: ' + spd + ' мс';
+  hudPlayer.textContent = 'Игрок: ' + p.name;
+  hudLevel.textContent  = 'Уровень: ' + p.level + '/' + MAX_LEVEL;
+  hudScore.textContent  = 'Очки: ' + p.score;
+  hudTarget.textContent = 'Цель: ' + tgt;
+  hudSpeed.textContent  = 'Скорость: ' + spd + 'мс';
+  updateStartButton();
+}
+function updateStartButton() {
+  const p = currentPlayer();
+  if (running) { startPauseBtn.textContent = 'Пауза'; startPauseBtn.disabled = false; return; }
+  if (!p) { startPauseBtn.textContent = 'Старт'; startPauseBtn.disabled = false; return; }
+  if (p.completed) { startPauseBtn.textContent = 'Игра пройдена'; startPauseBtn.disabled = true; return; }
+  startPauseBtn.textContent = 'Старт: Уровень ' + p.level;
+  startPauseBtn.disabled = false;
+}
+function setStatus(msg, isError) {
+  statusEl.textContent = msg;
+  statusEl.style.color = isError ? '#b30000' : '#222';
+}
+
+// --- Фигуры ---
+const COLORS = {
+  1: '#00BCD4', // I — бирюзовый
+  2: '#3F51B5', // J — индиго
+  3: '#FF9800', // L — оранжевый
+  4: '#FFEB3B', // O — жёлтый
+  5: '#4CAF50', // S — зелёный
+  6: '#9C27B0', // T — фиолетовый
+  7: '#F44336'  // Z — красный
+};
+const SHAPES = [
+  // I
+  { id:1, m:[
+    [0,0,0,0],
+    [1,1,1,1],
+    [0,0,0,0],
+    [0,0,0,0]
+  ]},
+  // J
+  { id:2, m:[
+    [1,0,0],
+    [1,1,1],
+    [0,0,0]
+  ]},
+  // L
+  { id:3, m:[
+    [0,0,1],
+    [1,1,1],
+    [0,0,0]
+  ]},
+  // O
+  { id:4, m:[
+    [1,1],
+    [1,1]
+  ]},
+  // S
+  { id:5, m:[
+    [0,1,1],
+    [1,1,0],
+    [0,0,0]
+  ]},
+  // T
+  { id:6, m:[
+    [0,1,0],
+    [1,1,1],
+    [0,0,0]
+  ]},
+  // Z
+  { id:7, m:[
+    [1,1,0],
+    [0,1,1],
+    [0,0,0]
+  ]}
+];
+function cloneMatrix(m) { return m.map(row => row.slice()); }
+
+function rotateCW(m) {
+  const n = m.length, res = Array.from({length:n}, () => Array(n).fill(0));
+  for (let y=0; y<n; y++) for (let x=0; x<n; x++) res[x][n-1-y] = m[y][x];
+  return res;
+}
+function rotateCCW(m) {
+  const n = m.length, res = Array.from({length:n}, () => Array(n).fill(0));
+  for (let y=0; y<n; y++) for (let x=0; x<n; x++) res[n-1-x][y] = m[y][x];
+  return res;
+}
+function randomShape() {
+  const s = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+  return { id: s.id, m: cloneMatrix(s.m) };
+}
+
+// --- Борд/игра ---
+function prepareBoard() {
+  board = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+  cur = null;
+  next = randomShape();
+  acc = 0; lastTime = 0;
+  const p = currentPlayer();
+  if (p) {
+    level = p.level;
+    score = p.score;
+    dropInterval = speedForLevel(level);
+  } else {
+    level = 1; score = 0; dropInterval = speedForLevel(1);
+  }
+  draw();
+  drawNext();
+  updateInfo();
+}
+
+function startOrPause() {
+  const p = currentPlayer();
+  if (!p) { setStatus('Сначала выберите игрока или создайте нового', true); return; }
+  if (p.completed) { setStatus('Игра уже пройдена.', true); return; }
+
+  if (!running) {
+  // запуск/продолжение
+  if (!cur) spawnPiece();
+  running = true;
+  lastTime = performance.now();
+  animationId = requestAnimationFrame(loop);
+  // АУДИО: активируем по жесту, запускаем музыку
+  AudioT.init(); AudioT.resume(); AudioT.startMusic();
+  setStatus('Уровень ' + level + ' начат. Очки: ' + score + '/' + targetScoreForLevel(level) + '.');
+} else {
+    // пауза
+    running = false;
+    if (animationId) cancelAnimationFrame(animationId);
+    setStatus('Пауза.');
+  }
+  updateStartButton();
+}
+
+function resetField() {
+  running = false;
+  if (animationId) cancelAnimationFrame(animationId);
+  AudioT.stopMusic(); // стоп музыки при сбросе
+  prepareBoard();
+  setStatus('Поле сброшено. Нажмите «Старт».');
+  updateStartButton();
+}
+
+function loop(time) {
+  const delta = time - lastTime;
+  lastTime = time;
+  acc += delta;
+  if (acc >= dropInterval) {
+    if (!move(0, 1)) {
+      lockPiece();
+      clearLinesAndScore();
+      spawnPiece();
+    }
+    acc = 0;
+  }
+  draw();
+  if (running) animationId = requestAnimationFrame(loop);
+}
+
+function spawnPiece() {
+  cur = next ? { id: next.id, m: cloneMatrix(next.m), x: 3, y: -2 } : { id: randomShape().id, m: randomShape().m, x: 3, y: -2 };
+  next = randomShape();
+  drawNext();
+  if (collides(cur.m, cur.x, cur.y)) {
+    gameOver();
+  }
+}
+
+function collides(m, offX, offY) {
+  const n = m.length;
+  for (let y=0; y<n; y++) {
+    for (let x=0; x<n; x++) {
+      if (!m[y][x]) continue;
+      const px = offX + x;
+      const py = offY + y;
+      if (py < 0) continue; // над полем — ок
+      if (px < 0 || px >= COLS || py >= ROWS) return true;
+      if (board[py][px]) return true;
+    }
+  }
+  return false;
+}
+
+function move(dx, dy) {
+  if (!cur) return false;
+  const nx = cur.x + dx, ny = cur.y + dy;
+  if (!collides(cur.m, nx, ny)) {
+    cur.x = nx; cur.y = ny;
+    return true;
+  }
+  return false;
+}
+
+function hardDrop() {
+  if (!cur) return;
+  while (move(0, 1)) { /* падаем до упора */ }
+  lockPiece();
+  clearLinesAndScore();
+  spawnPiece();
+  draw();
+}
+
+function rotate(dir) { // dir = 1 (CW) или -1 (CCW)
+  if (!cur) return;
+  let m = cur.m;
+  m = dir === 1 ? rotateCW(m) : rotateCCW(m);
+  // O-куб не требует сдвигов — но проверим общий случай
+  const kicks = [0, -1, 1, -2, 2];
+  for (let i=0; i<kicks.length; i++) {
+    const nx = cur.x + kicks[i];
+    if (!collides(m, nx, cur.y)) {
+      cur.m = m; cur.x = nx;
+      AudioT.turn(); // SFX поворота
+      return;
+    }
+  }
+  // не смогли — оставляем как было
+}
+
+function lockPiece() {
+  const n = cur.m.length;
+  for (let y=0; y<n; y++) {
+    for (let x=0; x<n; x++) {
+      if (!cur.m[y][x]) continue;
+      const px = cur.x + x;
+      const py = cur.y + y;
+      AudioT.lock();
+      if (py < 0) { // заклеились над верхом — поражение
+        gameOver();
+        return;
+      }
+      board[py][px] = cur.id;
+    }
+  }
+}
+
+function clearLinesAndScore() {
+  let lines = 0;
+  for (let y = ROWS - 1; y >= 0; ) {
+    if (board[y].every(v => v !== 0)) {
+      board.splice(y, 1);
+      board.unshift(Array(COLS).fill(0));
+      lines++;
+      // не уменьшаем y — на этом же индексе теперь новая строка
+    } else {
+      y--;
+    }
+  }
+  if (lines > 0) {
+   AudioT.clear(lines);
+    const p = currentPlayer();
+    const base = [0, 100, 300, 500, 800][lines] || 0;
+    const gained = base * level;
+    score += gained;
+    if (p) {
+      p.score = score; p.level = level;
+      saveState();
+    }
+    updateInfo();
+    checkLevelUp();
+    setStatus('Собрано линий: ' + lines + '. +' + gained + ' очков.');
+  }
+}
+
+function checkLevelUp() {
+  const p = currentPlayer();
+  const tgt = targetScoreForLevel(level);
+  if (score >= tgt) {
+    // Уровень пройден
+    running = false;
+    if (animationId) cancelAnimationFrame(animationId);
+    if (level < MAX_LEVEL) {
+      const completedLevel = level;
+      level++;
+      score = 0;
+      dropInterval = speedForLevel(level);
+      if (p) { p.level = level; p.score = score; saveState(); }
+      updateInfo();
+      showModal('Уровень ' + completedLevel + ' пройден!',
+        'Вы достигли цели уровня. Нажмите «ОК», затем «Старт: Уровень ' + level + '».');
+      setStatus('Готовы к уровню ' + level + '. Скорость увеличена.');
+    } else {
+      if (p) { p.completed = true; p.score = 0; saveState(); }
+      updateInfo();
+      showModal('Игра пройдена!', 'Поздравляем! Вы покорили 10 уровень.');
+      setStatus('Игра пройдена. Вы мастер тетриса!');
+    }
+    updateStartButton();
+  }
+}
+
+function gameOver() {
+  running = false;
+  if (animationId) cancelAnimationFrame(animationId);
+  AudioT.stopMusic();
+  AudioT.gameOver();
+  setStatus('Поражение: нет места для фигур. Попробуйте снова.', true);
+  updateStartButton();
+}
+
+// --- Отрисовка ---
+function clearCanvas() {
+  ctx.fillStyle = '#111';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+function drawCell(gx, gy, id) {
+  const x = gx * CELL, y = gy * CELL;
+  const color = COLORS[id] || '#888';
+  ctx.fillStyle = color;
+  ctx.fillRect(x, y, CELL, CELL);
+  // “объёмный” штрих
+  ctx.fillStyle = 'rgba(255,255,255,0.12)';
+  ctx.fillRect(x, y, CELL, 4);
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillRect(x, y + CELL - 4, CELL, 4);
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, y + 0.5, CELL - 1, CELL - 1);
+}
+function drawGrid() {
+  ctx.strokeStyle = '#1d1d1d';
+  ctx.lineWidth = 1;
+  for (let x = 0; x <= COLS; x++) {
+    ctx.beginPath();
+    ctx.moveTo(x * CELL + 0.5, 0);
+    ctx.lineTo(x * CELL + 0.5, ROWS * CELL);
+    ctx.stroke();
+  }
+  for (let y = 0; y <= ROWS; y++) {
+    ctx.beginPath();
+    ctx.moveTo(0, y * CELL + 0.5);
+    ctx.lineTo(COLS * CELL, y * CELL + 0.5);
+    ctx.stroke();
+  }
+}
+function draw() {
+  clearCanvas();
+  // Поле
+  for (let y=0; y<ROWS; y++) {
+    for (let x=0; x<COLS; x++) {
+      const id = board[y][x];
+      if (id) drawCell(x, y, id);
+    }
+  }
+  // Текущая фигура
+  if (cur) {
+    const n = cur.m.length;
+    for (let y=0; y<n; y++) {
+      for (let x=0; x<n; x++) {
+        if (!cur.m[y][x]) continue;
+        const gx = cur.x + x;
+        const gy = cur.y + y;
+        if (gy >= 0) drawCell(gx, gy, cur.id);
+      }
+    }
+  }
+  drawGrid();
+}
+function drawNext() {
+   nextCtx.fillStyle = '#111';
+  nextCtx.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+  if (!next) return;
+  const m = next.m;
+  const n = m.length;
+  // Центрируем в 4×4 сетке
+  const prevCell = 24;
+  const offsetX = Math.floor((4 - n) / 2);
+  const offsetY = Math.floor((4 - n) / 2);
+  // сетка
+  nextCtx.strokeStyle = '#e0e0e0';
+  nextCtx.lineWidth = 1;
+  for (let i=0; i<=4; i++) {
+    nextCtx.beginPath();
+    nextCtx.moveTo(0.5 + i*prevCell, 0);
+    nextCtx.lineTo(0.5 + i*prevCell, 4*prevCell);
+    nextCtx.stroke();
+    nextCtx.beginPath();
+    nextCtx.moveTo(0, 0.5 + i*prevCell);
+    nextCtx.lineTo(4*prevCell, 0.5 + i*prevCell);
+    nextCtx.stroke();
+  }
+  for (let y=0; y<n; y++) {
+    for (let x=0; x<n; x++) {
+      if (!m[y][x]) continue;
+      const gx = (x + offsetX) * prevCell;
+      const gy = (y + offsetY) * prevCell;
+      const color = COLORS[next.id] || '#888';
+      nextCtx.fillStyle = color;
+      nextCtx.fillRect(gx, gy, prevCell, prevCell);
+      nextCtx.fillStyle = 'rgba(255,255,255,0.12)';
+      nextCtx.fillRect(gx, gy, prevCell, 3);
+      nextCtx.fillStyle = 'rgba(0,0,0,0.25)';
+      nextCtx.fillRect(gx, gy + prevCell - 3, prevCell, 3);
+      nextCtx.strokeStyle = 'rgba(0,0,0,0.35)';
+      nextCtx.strokeRect(gx + 0.5, gy + 0.5, prevCell - 1, prevCell - 1);
+    }
+  }
+}
+
+// --- Ввод ---
+function onKey(e) {
+  if (!running) {
+    if (e.code === 'Space') { startOrPause(); e.preventDefault(); }
+    return;
+  }
+  const code = e.code || e.key;
+  if (code === 'ArrowLeft') { move(-1,0); e.preventDefault(); }
+  else if (code === 'ArrowRight') { move(1,0); e.preventDefault(); }
+  else if (code === 'ArrowDown') { if (!move(0,1)) { lockPiece(); clearLinesAndScore(); spawnPiece(); } e.preventDefault(); }
+  else if (code === 'ArrowUp') { rotate(1); e.preventDefault(); }
+  else if (code === 'KeyZ') { rotate(-1); e.preventDefault(); }
+  else if (code === 'Space') { hardDrop(); e.preventDefault(); }
+}
+
+// --- Модалка ---
+function showModal(title, text) {
+  modalTitle.textContent = title;
+  modalText.textContent = text;
+  modal.classList.add('open');
+}
+function closeModal() {
+  modal.classList.remove('open');
+}
+
+// --- Инициализация ---
+function init() {
+  renderPlayers();
+  prepareBoard();
+  addPlayerBtn.onclick = addPlayer;
+  startPauseBtn.onclick = startOrPause;
+  resetBtn.onclick = resetField;
+  document.addEventListener('keydown', onKey);
+  setStatus('Выберите игрока или создайте нового, затем нажмите «Старт».');
+  updateStartButton();
+}
+window.addEventListener('load', init);
+</script>
+</body>
+</html>

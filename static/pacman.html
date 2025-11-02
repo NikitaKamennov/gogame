@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Pac‑Man — 10 уровней</title>
+<style>
+/* Тёмный фон страницы и базовая типографика */
+body {
+  font-family: Arial, sans-serif;
+  background: #2a2a2a; /* тёмно-серый фон */
+  color: #eaeaea;      /* светлый текст по умолчанию */
+  max-width: 1200px;
+  margin: 20px auto;
+  padding: 0 16px;
+}
+h1 { margin: 0 0 12px; }
+
+/* Две колонки: поле (слева) и панель (справа) */
+.row {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 24px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .row { grid-template-columns: 1fr; }
+}
+
+/* Левая панель с игрой на светлом фоне */
+.game-panel {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff; /* светлый фон для контраста */
+  color: #222;
+}
+.game-panel h2 { margin: 0 0 10px; font-size: 18px; }
+.legend { margin-top: 8px; font-size: 14px; color: #555; }
+
+canvas { border: 1px solid #ccc; background: #000; display: block; border-radius: 6px; }
+
+.hud { margin: 10px 0 0; display: flex; gap: 16px; flex-wrap: wrap; color: #444; }
+
+/* Правая панель управления на светлом фоне */
+.panel {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fafafa;
+  color: #222;
+}
+.panel h2 { margin: 0 0 10px; font-size: 18px; }
+.players { display: flex; flex-wrap: wrap; gap: 8px; }
+.player-btn { padding: 6px 10px; border: 1px solid #999; border-radius: 6px; background: #fff; cursor: pointer; }
+.player-btn:hover { background: #f0f0f0; }
+.player-btn.active { background: #007cba; color: #fff; border-color: #007cba; }
+.add-form { display: flex; gap: 8px; margin-top: 8px; }
+.add-form input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
+.add-form button { padding: 8px 12px; background: #007cba; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.add-form button:hover { background: #005a87; }
+.info { margin-top: 10px; font-size: 14px; color: #444; }
+.actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { padding: 8px 12px; border-radius: 6px; cursor: pointer; border: 1px solid #ccc; background: #eee; color: #111; }
+.btn:hover { background: #e0e0e0; }
+.btn.primary { background: #28a745; color: #fff; border: none; }
+.btn.primary:hover { background: #1e7e34; }
+.btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+.status { margin-top: 8px; padding: 8px; background: #eef6ff; border: 1px solid #cfe2ff; border-radius: 6px; min-height: 20px; color: #222; }
+.muted { color: #777; }
+
+/* Модалка */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 1000; }
+.modal.open { display: flex; }
+.modal-content { width: 90%; max-width: 420px; background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); color: #222; }
+.modal-content h3 { margin: 0 0 10px; }
+.modal-content p { margin: 0 0 16px; color: #444; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.modal-actions .btn { min-width: 100px; }
+
+/* Навигация */
+.nav { margin: 8px 0 16px; }
+.nav a { color: #8ecbff; text-decoration: none; }
+.nav a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="nav"><a href="/">← Выбор игры</a></div>
+<h1>Pac‑Man — 10 уровней</h1>
+
+<div class="row">
+  <!-- Игровое поле слева -->
+  <div class="game-panel">
+    <h2>Поле 560×620</h2>
+    <canvas id="game" width="560" height="620"></canvas>
+    <div class="hud">
+      <div id="hudPlayer">Игрок: —</div>
+      <div id="hudLevel">Уровень: 1/10</div>
+      <div id="hudScore">Очки: 0</div>
+      <div id="hudLives">Жизни: 3</div>
+      <div id="hudPellets">Пеллеты: 0</div>
+      <div id="hudFright">Испуг: 0.0с</div>
+      <div id="hudSpeeds">Скорости: —</div>
+    </div>
+    <div class="legend">
+      Управление: ←/→/↑/↓ или WASD — движение. Space — Старт/Пауза. P — Пауза/Продолжить.<br/>
+      Съедайте точки, энергетики пугают призраков. Сожранный испуганный призрак отправляется в дом.
+    </div>
+  </div>
+
+  <!-- Панель управления справа -->
+  <div class="panel">
+    <h2>Игроки</h2>
+    <div id="players" class="players"></div>
+    <div class="add-form">
+      <input id="newPlayerName" placeholder="Имя нового игрока" />
+      <button id="addPlayerBtn">Добавить</button>
+    </div>
+    <div id="playerInfo" class="info muted">Игрок не выбран</div>
+
+    <div class="actions">
+      <button id="startPauseBtn" class="btn primary">Старт</button>
+      <button id="resetBtn" class="btn">Сбросить поле</button>
+    </div>
+
+    <div class="legend">
+      - +10 очков за пеллету, +50 за энергетик, 200/400/800/1600 за призраков в цепочке.<br/>
+      - Победа — все пеллеты съедены. На 10 уровне — конец игры.<br/>
+      - Прогресс (уровень) на игрока, сохраняется в браузере.
+    </div>
+
+    <div id="status" class="status">Выберите игрока или создайте нового, затем нажмите «Старт».</div>
+  </div>
+</div>
+
+<!-- Модалка -->
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-content">
+    <h3 id="modalTitle">Уровень пройден</h3>
+    <p id="modalText">Описание</p>
+    <div class="modal-actions">
+      <button id="modalOk" class="btn primary">ОК</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- Поле/сетка ---
+const TILE = 20;
+const COLS = 28;
+const ROWS = 31;
+const WIDTH = COLS * TILE;  // 560
+const HEIGHT = ROWS * TILE; // 620
+const MAX_LEVEL = 10;
+
+// --- LocalStorage ---
+const STORAGE_KEY = 'pacman_state';
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { players: [], currentPlayerName: '' };
+    const s = JSON.parse(raw);
+    if (!Array.isArray(s.players)) s.players = [];
+    if (typeof s.currentPlayerName !== 'string') s.currentPlayerName = '';
+    return s;
+  } catch (_) {
+    return { players: [], currentPlayerName: '' };
+  }
+}
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+// --- DOM ---
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const playersWrap = document.getElementById('players');
+const newPlayerName = document.getElementById('newPlayerName');
+const addPlayerBtn = document.getElementById('addPlayerBtn');
+const playerInfo = document.getElementById('playerInfo');
+const startPauseBtn = document.getElementById('startPauseBtn');
+const resetBtn = document.getElementById('resetBtn');
+const statusEl = document.getElementById('status');
+
+const hudPlayer = document.getElementById('hudPlayer');
+const hudLevel  = document.getElementById('hudLevel');
+const hudScore  = document.getElementById('hudScore');
+const hudLives  = document.getElementById('hudLives');
+const hudPellets= document.getElementById('hudPellets');
+const hudFright = document.getElementById('hudFright');
+const hudSpeeds = document.getElementById('hudSpeeds');
+
+const modal = document.getElementById('modal');
+const modalTitle = document.getElementById('modalTitle');
+const modalText = document.getElementById('modalText');
+const modalOk = document.getElementById('modalOk');
+modalOk.onclick = () => closeModal();
+
+// --- Состояние ---
+let state = loadState();
+function currentPlayer() {
+  if (!state.currentPlayerName) return null;
+  return state.players.find(p => p.name === state.currentPlayerName) || null;
+}
+function ensurePlayerDefaults(p) {
+  if (typeof p.level !== 'number' || p.level < 1) p.level = 1;
+  if (typeof p.score !== 'number' || p.score < 0) p.score = 0;
+  if (typeof p.completed !== 'boolean') p.completed = false;
+  if (p.level > MAX_LEVEL) p.level = MAX_LEVEL;
+}
+function renderPlayers() {
+  playersWrap.innerHTML = '';
+  state.players.forEach(p => {
+    ensurePlayerDefaults(p);
+    const btn = document.createElement('button');
+    btn.className = 'player-btn' + (p.name === state.currentPlayerName ? ' active' : '');
+    btn.textContent = p.name;
+    btn.title = 'Уровень: ' + p.level + (p.completed ? ' (пройдено)' : '') + ', Очки (ур.): ' + p.score;
+    btn.onclick = function() {
+      selectPlayer(p.name);
+      updateInfo();
+      resetLevel();
+    };
+    playersWrap.appendChild(btn);
+  });
+  if (!state.players.length) {
+    const div = document.createElement('div');
+    div.className = 'muted';
+    div.textContent = 'Пока нет игроков. Создайте нового.';
+    playersWrap.appendChild(div);
+  }
+  updateInfo();
+}
+function selectPlayer(name) {
+  state.currentPlayerName = name;
+  let p = state.players.find(x => x.name === name);
+  if (!p) {
+    p = { name: name, level: 1, score: 0, completed: false };
+    state.players.push(p);
+  }
+  ensurePlayerDefaults(p);
+  saveState();
+  renderPlayers();
+}
+function addPlayer() {
+  const name = (newPlayerName.value || '').trim();
+  if (!name) { setStatus('Введите имя игрока', true); return; }
+  if (state.players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+    setStatus('Такой игрок уже существует', true);
+    return;
+  }
+  state.players.push({ name: name, level: 1, score: 0, completed: false });
+  state.currentPlayerName = name;
+  saveState();
+  newPlayerName.value = '';
+  renderPlayers();
+  resetLevel();
+  setStatus('Игрок ' + name + ' создан. Нажмите «Старт».');
+}
+function updateInfo() {
+  const p = currentPlayer();
+  if (!p) {
+    playerInfo.textContent = 'Игрок не выбран';
+    hudPlayer.textContent = 'Игрок: —';
+    updateStartButton();
+    return;
+  }
+  ensurePlayerDefaults(p);
+  const sp = speedsForLevel(p.level);
+  const fright = frightenedDurationForLevel(p.level).toFixed(1);
+  playerInfo.textContent = 'Игрок: ' + p.name + (p.completed ? ' (Игра пройдена)' : '') +
+                           ' — Уровень: ' + p.level + '/' + MAX_LEVEL +
+                           ', Очки (ур.): ' + p.score;
+  hudPlayer.textContent = 'Игрок: ' + p.name;
+  hudLevel.textContent  = 'Уровень: ' + p.level + '/' + MAX_LEVEL;
+  hudScore.textContent  = 'Очки: ' + p.score;
+  hudFright.textContent = 'Испуг: ' + fright + 'с';
+  hudSpeeds.textContent = 'Скорости (Пак/Призр./Испуг): ' + sp.pac.toFixed(0) + '/' + sp.ghost.toFixed(0) + '/' + sp.fright.toFixed(0);
+  updateStartButton();
+}
+function updateStartButton() {
+  const p = currentPlayer();
+  if (running) { startPauseBtn.textContent = 'Пауза'; startPauseBtn.disabled = false; return; }
+  if (!p) { startPauseBtn.textContent = 'Старт'; startPauseBtn.disabled = false; return; }
+  if (p.completed) { startPauseBtn.textContent = 'Игра пройдена'; startPauseBtn.disabled = true; return; }
+  startPauseBtn.textContent = 'Старт: Уровень ' + p.level;
+  startPauseBtn.disabled = false;
+}
+function setStatus(msg, isError) {
+  statusEl.textContent = msg;
+  statusEl.style.color = isError ? '#b30000' : '#222';
+}
+
+// --- Сложность ---
+function clampLevel(l){ return Math.max(1, Math.min(l, MAX_LEVEL)); }
+function speedsForLevel(lvl) {
+  const t = (clampLevel(lvl) - 1) / (MAX_LEVEL - 1);
+  return {
+    pac: 100 + 10 * t,    // 100 -> 110
+    ghost: 80 + 60 * t,   // 80 -> 140
+    fright: 60 + 30 * t   // 60 -> 90
+  };
+}
+function frightenedDurationForLevel(lvl) {
+  const t = (clampLevel(lvl) - 1) / (MAX_LEVEL - 1);
+  return 6.0 + (2.0 - 6.0) * t; // 6.0 -> 2.0
+}
+function releaseDelayForLevel(lvl) {
+  const t = (clampLevel(lvl) - 1) / (MAX_LEVEL - 1);
+  return 2.0 + (0.8 - 2.0) * t; // 2.0 -> 0.8
+}
+
+// --- Карта лабиринта (процедурная) ---
+const CELL_WALL = 1;
+const CELL_EMPTY = 0;
+const CELL_HOUSE = 2;  // дом призраков (внутри)
+const CELL_DOOR  = 3;  // дверь дома (для призраков проходима, для Пака нет)
+
+let grid;       // int[ROWS][COLS]
+let pellets;    // boolean[ROWS][COLS]
+let power;      // boolean[ROWS][COLS]
+let pelletCount = 0;
+
+const house = { x: Math.floor(COLS/2)-3, y: Math.floor(ROWS/2)-2, w: 6, h: 4 };
+
+function buildGrid() {
+  grid = Array.from({length: ROWS}, () => Array(COLS).fill(CELL_EMPTY));
+
+  // Границы
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (x === 0 || x === COLS-1 || y === 0 || y === ROWS-1) grid[y][x] = CELL_WALL;
+    }
+  }
+
+  // Горизонтальные полосы с проходами
+  // Случайные горизонтальные перегородки
+for (let y = 4; y < ROWS-4; y += 4) {
+  // заполняем стеной с вероятностью, потом пробиваем отверстия
+  for (let x = 2; x < COLS-2; x++) {
+    if (Math.random() < 0.78) grid[y][x] = CELL_WALL;
+  }
+  // пробиваем 2–3 случайных прохода
+  const holes = 2 + Math.floor(Math.random() * 2);
+  for (let i = 0; i < holes; i++) {
+    const hx = 2 + Math.floor(Math.random() * (COLS - 4));
+    grid[y][hx] = CELL_EMPTY;
+    grid[y][Math.min(COLS - 3, hx + 1)] = CELL_EMPTY;
+  }
+}
+
+  // Вертикальные полосы с проходами
+for (let x = 6; x < COLS-6; x += 7) {
+  for (let y = 3; y < ROWS-3; y++) {
+    if (Math.random() < 0.74) grid[y][x] = CELL_WALL;
+  }
+  // пробиваем 2 случайных прохода
+  for (let i = 0; i < 2; i++) {
+    const hy = 3 + Math.floor(Math.random() * (ROWS - 6));
+    grid[hy][x] = CELL_EMPTY;
+    grid[Math.min(ROWS - 4, hy + 1)][x] = CELL_EMPTY;
+  }
+}
+
+  // Дом призраков
+  for (let yy = 0; yy < house.h; yy++) {
+    for (let xx = 0; xx < house.w; xx++) {
+      const gx = house.x + xx;
+      const gy = house.y + yy;
+      grid[gy][gx] = CELL_HOUSE;
+    }
+  }
+  // Обвести дом стеной
+  for (let x = house.x-1; x <= house.x + house.w; x++) {
+    grid[house.y-1][x] = CELL_WALL;
+    grid[house.y + house.h][x] = CELL_WALL;
+  }
+  for (let y = house.y-1; y <= house.y + house.h; y++) {
+    grid[y][house.x-1] = CELL_WALL;
+    grid[y][house.x + house.w] = CELL_WALL;
+  }
+  // Дверь в дом (верхняя центральная)
+  const doorX = house.x + Math.floor(house.w/2);
+  grid[house.y-1][doorX] = CELL_DOOR;
+
+  // Туннели по бокам (делаем проходы через границу)
+  const tunnelY = Math.floor(ROWS/2) + 1;
+  grid[tunnelY][0] = CELL_EMPTY;
+  grid[tunnelY][COLS-1] = CELL_EMPTY;
+
+  // Пеллеты и энергетики
+
+  // Пеллеты и энергетики — только на ДОСТИЖИМЫХ для Пакмэна клетках
+  pellets = Array.from({length: ROWS}, () => Array(COLS).fill(false));
+  power   = Array.from({length: ROWS}, () => Array(COLS).fill(false));
+  pelletCount = 0;
+
+  // стартовая клетка Пака (как в placeEntities): под дверью дома
+  const spawnX = house.x + Math.floor(house.w / 2);
+  const spawnY = house.y + house.h + 2;
+
+  const reachable = computeReachableForPacman(spawnX, spawnY);
+
+  for (let y = 1; y < ROWS-1; y++) {
+    for (let x = 1; x < COLS-1; x++) {
+      if (grid[y][x] === CELL_EMPTY && reachable[y][x]) {
+        // не ставим пеллеты на дверях и возле двери
+        if (!isHouseDoorArea(x, y)) {
+          pellets[y][x] = true;
+          pelletCount++;
+        }
+      }
+    }
+  }
+  // Энергетики — по углам доступных зон
+  const corners = [
+    {x: 1, y: 1}, {x: COLS-2, y: 1}, {x: 1, y: ROWS-2}, {x: COLS-2, y: ROWS-2}
+  ];
+  for (const c of corners) {
+    if (grid[c.y][c.x] === CELL_EMPTY && reachable[c.y][c.x]) {
+      power[c.y][c.x] = true;
+      if (pellets[c.y][c.x]) { pellets[c.y][c.x] = false; pelletCount--; }
+    }
+  }
+}
+
+function isWall(x,y, forPacman=true) {
+  const cell = grid[y][x];
+  if (cell === CELL_WALL) return true;
+  if (cell === CELL_DOOR) return forPacman; // Пак не проходит, призраки проходят
+  return false;
+}
+function isHouseDoorArea(x,y) {
+  // Несколько тайлов над дверью без пеллет для красивого выхода
+  const doorX = house.x + Math.floor(house.w/2);
+  const doorY = house.y - 1;
+  return (x === doorX && (y === doorY || y === doorY-1));
+}
+
+// --- Игровые сущности ---
+const DIR = { LEFT: 0, RIGHT: 1, UP: 2, DOWN: 3 };
+const DIR_V = [
+  {x:-1,y:0},{x:1,y:0},{x:0,y:-1},{x:0,y:1}
+];
+
+let running = false;
+let animationId = null;
+let lastTime = 0;
+
+let lives = 3;
+let frightenedTimer = 0;
+let frightChain = 0;
+
+let player; // {x,y,dir,desiredDir,speed}
+let ghosts; // array of ghosts
+
+function resetLevel() {
+  buildGrid();
+  lives = 3;
+  frightenedTimer = 0;
+  frightChain = 0;
+  const p = currentPlayer();
+  if (p) p.score = 0;
+  placeEntities();
+  updateInfo();
+  hudLives.textContent = 'Жизни: ' + lives;
+  hudPellets.textContent = 'Пеллеты: ' + pelletCount;
+  hudScore.textContent = 'Очки: ' + (p ? p.score : 0);
+  draw();
+}
+
+function placeEntities() {
+  const lvl = currentPlayer() ? currentPlayer().level : 1;
+  const sp = speedsForLevel(lvl);
+
+  // Pac‑Man — под дверью
+  const px = house.x + Math.floor(house.w/2);
+  const py = house.y + house.h + 2;
+
+  player = {
+    x: px * TILE + TILE/2,
+    y: py * TILE + TILE/2,
+    dir: DIR.LEFT,
+    desiredDir: DIR.LEFT,
+    speed: sp.pac,
+    mouthPhase: 0 // 0..1
+  };
+
+  ghosts = [];
+  const colors = ['#ff0000', '#ffb8ff', '#00ffff', '#ffa500'];
+  for (let i = 0; i < 4; i++) {
+    const gx = house.x + 1 + i%3; // внутри дома
+    const gy = house.y + 1 + Math.floor(i/3);
+    ghosts.push({
+      x: gx*TILE + TILE/2,
+      y: gy*TILE + TILE/2,
+      dir: DIR.UP,
+      speed: sp.ghost,
+      color: colors[i],
+      mode: 'inhouse', // inhouse -> chase; frightened; eyes
+      release: (i+1) * releaseDelayForLevel(lvl), // задержка выхода
+    });
+  }
+}
+
+// --- Звук (WebAudio синтез) ---
+const AudioSys = (() => {
+  let ctx = null;
+  let master = null;
+  let sirenOsc = null, sirenGain = null, sirenLFO = null;
+  let powerOsc = null, powerGain = null;
+  let unlocked = false;
+  let wakaToggle = false;
+
+  function ensure() {
+    if (ctx) return true;
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      master = ctx.createGain();
+      master.gain.value = 0.08;
+      master.connect(ctx.destination);
+      unlocked = true;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+  function resume() {
+    if (!ctx) return ensure();
+    if (ctx.state === 'suspended') ctx.resume();
+    return true;
+  }
+
+  function beep(freq=440, time=0.07, type='square', vol=0.2) {
+    if (!ensure()) return;
+    resume();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = type;
+    o.frequency.value = freq;
+    g.gain.value = vol;
+    o.connect(g).connect(master);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + time);
+    o.stop(ctx.currentTime + time + 0.02);
+  }
+
+  function waka() {
+    if (!ensure()) return;
+    resume();
+    wakaToggle = !wakaToggle;
+    const f = wakaToggle ? 420 : 360;
+    beep(f, 0.05, 'square', 0.25);
+  }
+
+  function startSiren() {
+    if (!ensure()) return;
+    resume();
+    if (sirenOsc) return; // уже играет
+    sirenOsc = ctx.createOscillator();
+    sirenGain = ctx.createGain();
+    sirenLFO = ctx.createOscillator();
+    const lfoGain = ctx.createGain();
+
+    sirenOsc.type = 'sawtooth';
+    sirenOsc.frequency.value = 240; // базовая
+    sirenGain.gain.value = 0.05;
+
+    sirenLFO.type = 'sine';
+    sirenLFO.frequency.value = 3.2; // “вой”
+    lfoGain.gain.value = 120; // глубина
+
+    sirenLFO.connect(lfoGain);
+    lfoGain.connect(sirenOsc.frequency);
+
+    sirenOsc.connect(sirenGain).connect(master);
+    sirenOsc.start();
+    sirenLFO.start();
+  }
+  function stopSiren() {
+    if (sirenOsc) { try { sirenOsc.stop(); } catch(_){} }
+    if (sirenLFO) { try { sirenLFO.stop(); } catch(_){} }
+    sirenOsc = null; sirenLFO = null;
+  }
+
+  function startPower() {
+    if (!ensure()) return;
+    resume();
+    if (powerOsc) return;
+    powerOsc = ctx.createOscillator();
+    powerGain = ctx.createGain();
+    powerOsc.type = 'triangle';
+    powerOsc.frequency.value = 110;
+    powerGain.gain.value = 0.06;
+    powerOsc.connect(powerGain).connect(master);
+    powerOsc.start();
+  }
+  function stopPower() {
+    if (powerOsc) { try { powerOsc.stop(); } catch(_){} }
+    powerOsc = null;
+  }
+
+  function eatGhost() {
+    beep(880, 0.12, 'square', 0.25);
+  }
+  function death() {
+    if (!ensure()) return;
+    resume();
+    // нисходящий свип
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(600, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.8);
+    g.gain.value = 0.2;
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.8);
+    o.connect(g).connect(master);
+    o.start();
+    o.stop(ctx.currentTime + 0.85);
+  }
+  function intro() {
+    // короткая фанфара (3 ноты)
+    beep(523, 0.12, 'square', 0.18);
+    setTimeout(()=>beep(659, 0.12, 'square', 0.18), 140);
+    setTimeout(()=>beep(784, 0.18, 'square', 0.18), 300);
+  }
+
+  return { ensure, resume, waka, startSiren, stopSiren, startPower, stopPower, eatGhost, death, intro };
+})();
+
+// --- Управление старт/пауза/сброс ---
+function startOrPause() {
+  const p = currentPlayer();
+  if (!p) { setStatus('Сначала выберите игрока или создайте нового', true); return; }
+  if (p.completed) { setStatus('Игра уже пройдена.', true); return; }
+
+  if (!running) {
+    AudioSys.ensure(); AudioSys.resume(); AudioSys.intro();
+    running = true;
+    lastTime = performance.now();
+    animationId = requestAnimationFrame(loop);
+    setStatus('Уровень ' + p.level + ' начат. Съешьте все пеллеты.');
+    AudioSys.startSiren();
+  } else {
+    running = false;
+    if (animationId) cancelAnimationFrame(animationId);
+    setStatus('Пауза.');
+    AudioSys.stopSiren();
+    AudioSys.stopPower();
+  }
+  updateStartButton();
+}
+function resetField() {
+  running = false;
+  if (animationId) cancelAnimationFrame(animationId);
+  AudioSys.stopSiren();
+  AudioSys.stopPower();
+  resetLevel();
+  setStatus('Поле сброшено. Нажмите «Старт».');
+  updateStartButton();
+}
+
+// --- Очки/жизни ---
+function addScore(s) {
+  const p = currentPlayer();
+  if (!p) return;
+  p.score += s;
+  hudScore.textContent = 'Очки: ' + p.score;
+  saveState();
+}
+function loseLife() {
+  running = false;
+  if (animationId) cancelAnimationFrame(animationId);
+  lives -= 1;
+  hudLives.textContent = 'Жизни: ' + lives;
+  setStatus('Вы погибли. Осталось жизней: ' + lives);
+  AudioSys.death();
+  AudioSys.stopSiren();
+  AudioSys.stopPower();
+
+  if (lives <= 0) {
+    gameOver();
+    return;
+  }
+  // Респаун через короткую задержку
+  setTimeout(() => {
+    frightenedTimer = 0;
+    frightChain = 0;
+    placeEntities();
+    draw();
+    running = true;
+    lastTime = performance.now();
+    animationId = requestAnimationFrame(loop);
+    AudioSys.startSiren();
+  }, 1200);
+}
+function gameOver() {
+  setStatus('Поражение: закончились жизни. Нажмите «Сбросить поле» или «Старт», чтобы попробовать снова.', true);
+  updateStartButton();
+}
+
+// --- Игровой цикл ---
+const keyState = { left:false, right:false, up:false, down:false };
+function loop(time) {
+  const dt = Math.min(0.03, (time - lastTime) / 1000);
+  lastTime = time;
+
+  update(dt);
+  draw();
+
+  if (running) animationId = requestAnimationFrame(loop);
+}
+
+function update(dt) {
+  const p = currentPlayer();
+  if (!p) return;
+  const sp = speedsForLevel(p.level);
+
+  // Обновляем таймер испуга
+  if (frightenedTimer > 0) {
+    frightenedTimer -= dt;
+    if (frightenedTimer <= 0) {
+      frightenedTimer = 0;
+      frightChain = 0;
+      for (const g of ghosts) if (g.mode === 'frightened') g.mode = 'chase';
+      AudioSys.stopPower();
+    }
+  }
+  hudFright.textContent = 'Испуг: ' + Math.max(0, frightenedTimer).toFixed(1) + 'с';
+
+  // Ввод желаемого направления
+  if (keyState.left)  player.desiredDir = DIR.LEFT;
+  if (keyState.right) player.desiredDir = DIR.RIGHT;
+  if (keyState.up)    player.desiredDir = DIR.UP;
+  if (keyState.down)  player.desiredDir = DIR.DOWN;
+
+  // Движение Пака
+  player.speed = sp.pac;
+  moveEntityGrid(player, player.desiredDir, true, dt);
+
+  // Механика пеллет
+  const tx = Math.floor(player.x / TILE);
+  const ty = Math.floor(player.y / TILE);
+  if (inBounds(tx,ty)) {
+    if (power[ty][tx]) {
+      power[ty][tx] = false;
+      AudioSys.startPower();
+      addScore(50);
+      frightenedTimer = frightenedDurationForLevel(p.level);
+      frightChain = 0;
+      for (const g of ghosts) if (g.mode !== 'eyes') g.mode = 'frightened';
+    } else if (pellets[ty][tx]) {
+      pellets[ty][tx] = false;
+      pelletCount--;
+      addScore(10);
+      AudioSys.waka();
+      hudPellets.textContent = 'Пеллеты: ' + pelletCount;
+      if (pelletCount <= 0) {
+        levelUpOrFinish();
+        return;
+      }
+    }
+  }
+
+  // Движение призраков
+  for (const g of ghosts) {
+    // Выход из дома по таймеру
+    if (g.mode === 'inhouse') {
+      g.release -= dt;
+      if (g.release <= 0) {
+        // Выйти через дверь
+        const doorX = house.x + Math.floor(house.w/2);
+        const doorY = house.y - 1;
+        const gx = Math.floor(g.x / TILE), gy = Math.floor(g.y / TILE);
+        if (gy > doorY) {
+          // идем вверх к двери
+          g.dir = DIR.UP;
+          g.speed = sp.ghost * 0.8;
+          moveEntityGrid(g, g.dir, false, dt, true); // призрак может проходить дверь
+        } else {
+          g.mode = 'chase';
+          g.speed = sp.ghost;
+        }
+      }
+      continue;
+    }
+
+    // Скорость по режиму
+    g.speed = (g.mode === 'frightened') ? sp.fright : (g.mode === 'eyes' ? sp.ghost*1.3 : sp.ghost);
+
+    // Выбор направления на перекрёстках
+    moveGhost(g, dt);
+  }
+
+  // Столкновения Пак <-> призраки
+  for (const g of ghosts) {
+    if (g.mode === 'inhouse') continue;
+    if (distance(player.x, player.y, g.x, g.y) <= TILE * 0.6) {
+      if (g.mode === 'frightened') {
+        g.mode = 'eyes';
+        addScore(eatScore());
+        AudioSys.eatGhost();
+      } else if (g.mode !== 'eyes') {
+        // смерть
+        loseLife();
+        return;
+      }
+    }
+  }
+}
+
+function eatScore() {
+  // 200, 400, 800, 1600 в одной энергии
+  const arr = [200,400,800,1600];
+  const val = arr[Math.min(frightChain, arr.length-1)];
+  frightChain++;
+  return val;
+}
+
+// --- Перемещение сущности по сетке ---
+function moveEntityGrid(e, desiredDir, forPacman, dt, ghostCanPassDoor=false) {
+  // Повернуть, если можно
+  const {cx, cy, atCenter} = tileCenterSnap(e.x, e.y);
+  if (atCenter) {
+    // пробуем повернуть к desiredDir
+    if (canMoveFromTile(cx, cy, desiredDir, forPacman, ghostCanPassDoor)) {
+      e.dir = desiredDir;
+    } else if (!canMoveFromTile(cx, cy, e.dir, forPacman, ghostCanPassDoor)) {
+      e.dir = e.dir; // упёрлись — останемся
+    }
+  }
+
+  // Смещение
+  const v = DIR_V[e.dir];
+  const nx = e.x + v.x * e.speed * dt;
+  const ny = e.y + v.y * e.speed * dt;
+
+  // Туннели (лево/право)
+  const t = wrapThroughTunnel(nx, ny, forPacman);
+  if (t) {
+    e.x = t.x; e.y = t.y;
+   } else {
+    // блок по стенам
+    const nextTx = Math.floor((nx) / TILE);
+    const nextTy = Math.floor((ny) / TILE);
+
+    // ВАЖНО: корректно передаём флаг "для кого стена" (Пак всегда true; призрак — !ghostCanPassDoor)
+    const wallFor = forPacman ? true : !ghostCanPassDoor;
+
+    if (inBounds(nextTx, nextTy) && !isWall(nextTx, nextTy, wallFor)) {
+      e.x = nx; e.y = ny;
+    } else {
+      // При блоке жёстко прибиваем к центру тайла по ОБЕИМ осям — это убирает залипание у ребра
+      const tc = tileCenterSnap(e.x, e.y);
+      e.x = tc.cx * TILE + TILE/2;
+      e.y = tc.cy * TILE + TILE/2;
+    }
+  }
+
+
+  // Если почти центр и хотим повернуть перпендикулярно — снап в центр и поворачиваем
+  const centerX = cx * TILE + TILE/2;
+  const centerY = cy * TILE + TILE/2;
+  const nearCenter = Math.hypot(e.x - centerX, e.y - centerY) < 6;
+  const isPerp = ((e.dir <= 1) && (desiredDir >= 2)) || ((e.dir >= 2) && (desiredDir <= 1));
+  if (!atCenter && nearCenter && isPerp && canMoveFromTile(cx, cy, desiredDir, forPacman, ghostCanPassDoor)) {
+    e.x = centerX;
+    e.y = centerY;
+    e.dir = desiredDir;
+  }
+
+  // Анимация “рта” у Пака
+  if (e === player) {
+    const moving = Math.abs(v.x) + Math.abs(v.y) > 0 && !blockedAhead(e, forPacman);
+    if (moving) {
+      e.mouthPhase += dt * 8; // скорость челюсти
+      if (e.mouthPhase > 2*Math.PI) e.mouthPhase -= 2*Math.PI;
+    } else {
+      // закрываем рот
+      e.mouthPhase = Math.max(0, e.mouthPhase - dt * 8);
+    }
+  }
+}
+
+function moveGhost(g, dt) {
+  const {cx, cy, atCenter} = tileCenterSnap(g.x, g.y);
+  if (atCenter) {
+    // доступные направления (не разворот на 180°, если есть альтернатива)
+    const options = [];
+    for (let d = 0; d < 4; d++) {
+      const back = (d === (g.dir^1)); // противоположное направление
+      if (g.mode !== 'eyes' && back) continue; // избегаем разворота без нужды
+      if (canMoveFromTile(cx, cy, d, false, g.mode!=='chase' || true)) { // призраки могут проходить дверь при выходе/eyes
+        options.push(d);
+      }
+    }
+    // если опций нет — разрешим разворот
+    if (options.length === 0) {
+      for (let d = 0; d < 4; d++) {
+        if (canMoveFromTile(cx, cy, d, false, true)) options.push(d);
+      }
+    }
+
+    // Выбор направления
+    let chosen = g.dir;
+    const pacTile = {x: Math.floor(player.x/TILE), y: Math.floor(player.y/TILE)};
+    const ghostTile = {x: cx, y: cy};
+
+    if (g.mode === 'eyes') {
+      // путь в дом (центр двери)
+      const door = {x: house.x + Math.floor(house.w/2), y: house.y};
+      chosen = bfsNextDir(ghostTile, door, false);
+      // в доме — переходим в chase
+      if (ghostTile.y >= house.y && ghostTile.y <= house.y+house.h && ghostTile.x >= house.x && ghostTile.x <= house.x+house.w) {
+        g.mode = 'chase';
+      }
+    } else if (g.mode === 'frightened') {
+      // убегаем: берем направление, увеличивающее дистанцию, с долей рандома
+      const candidates = options.slice();
+      chosen = candidates[0] ?? g.dir;
+      let best = -Infinity;
+      for (const d of candidates) {
+        const vx = DIR_V[d].x, vy = DIR_V[d].y;
+        const nx = ghostTile.x + vx, ny = ghostTile.y + vy;
+        const dist = -distance(nx, ny, pacTile.x, pacTile.y); // минус — чтобы “дальше” давало больше
+        const noise = Math.random() * 0.5;
+        const score = dist + noise;
+        if (score > best) { best = score; chosen = d; }
+      }
+    } else {
+      // chase: BFS следующий шаг к Паку, с небольшим шумом
+      if (Math.random() < 0.15) {
+        // иногда “ошибаемся”
+        chosen = options[Math.floor(Math.random()*options.length)] ?? g.dir;
+      } else {
+        chosen = bfsNextDir(ghostTile, pacTile, false) ?? (options[0] ?? g.dir);
+      }
+    }
+    g.dir = chosen;
+  }
+
+  moveEntityGrid(g, g.dir, false, dt, g.mode !== 'chase' || g.mode === 'eyes');
+}
+
+function blockedAhead(e, forPacman) {
+  const {cx, cy} = tileCenterSnap(e.x, e.y);
+  return !canMoveFromTile(cx, cy, e.dir, forPacman, false);
+}
+
+function tileCenterSnap(x, y) {
+  const cx = Math.floor(x / TILE);
+  const cy = Math.floor(y / TILE);
+  const centerX = cx*TILE + TILE/2;
+  const centerY = cy*TILE + TILE/2;
+  const atCenter = Math.abs(x - centerX) < 2 && Math.abs(y - centerY) < 2;
+  return { cx, cy, atCenter };
+}
+
+function canMoveFromTile(cx, cy, dir, forPacman, ghostCanPassDoor) {
+  const v = DIR_V[dir];
+  let nx = cx + v.x, ny = cy + v.y;
+  // туннели
+  if (ny === Math.floor(ROWS/2)+1) {
+    if (nx < 0) nx = COLS-1;
+    if (nx >= COLS) nx = 0;
+  }
+  if (!inBounds(nx, ny)) return false;
+  const cell = grid[ny][nx];
+  if (cell === CELL_WALL) return false;
+  if (cell === CELL_DOOR) return ghostCanPassDoor;
+  return true;
+}
+
+
+// Добавить в <script>: функция определения достижимых тайлов для Пакмэна
+   function computeReachableForPacman(startX, startY) {
+  const seen = Array.from({length: ROWS}, () => Array(COLS).fill(false));
+  if (!inBounds(startX, startY) || isWall(startX, startY, true)) return seen;
+
+  const q = [{ x: startX, y: startY }];
+  seen[startY][startX] = true;
+
+  while (q.length) {
+    const { x, y } = q.shift();
+    for (let d = 0; d < 4; d++) {
+      let nx = x + DIR_V[d].x;
+      let ny = y + DIR_V[d].y;
+
+      // учёт туннеля (wrap)
+      if (ny === Math.floor(ROWS/2) + 1) {
+        if (nx < 0) nx = COLS - 1;
+        if (nx >= COLS) nx = 0;
+      }
+
+      if (!inBounds(nx, ny)) continue;
+      if (seen[ny][nx]) continue;
+      if (isWall(nx, ny, true)) continue; // Пак не проходит дверь и стены
+
+      seen[ny][nx] = true;
+      q.push({ x: nx, y: ny });
+    }
+  }
+  return seen;
+}
+
+function wrapThroughTunnel(nx, ny, forPacman) {
+  const ty = Math.floor(ny / TILE);
+  if (ty === Math.floor(ROWS/2)+1) {
+    const tx = Math.floor(nx / TILE);
+    if (tx <= 0) return { x: (COLS-1)*TILE + TILE/2, y: ty*TILE + TILE/2 };
+    if (tx >= COLS-1) return { x: 1*TILE + TILE/2, y: ty*TILE + TILE/2 };
+  }
+  return null;
+}
+
+function inBounds(x,y){ return x>=0 && x<COLS && y>=0 && y<ROWS; }
+function distance(x1,y1,x2,y2){ const dx=x1-x2, dy=y1-y2; return Math.hypot(dx,dy); }
+
+// --- BFS для следующего шага ---
+function bfsNextDir(start, target, forPacman) {
+  const q = [];
+  const seen = Array.from({length: ROWS}, () => Array(COLS).fill(false));
+  const prev = Array.from({length: ROWS}, () => Array(COLS).fill(null));
+  q.push(start);
+  seen[start.y][start.x] = true;
+
+  const neigh = (x,y) => {
+    const res = [];
+    for (let d=0;d<4;d++){
+      let nx=x+DIR_V[d].x, ny=y+DIR_V[d].y;
+      if (ny === Math.floor(ROWS/2)+1) {
+        if (nx < 0) nx = COLS-1;
+        if (nx >= COLS) nx = 0;
+      }
+      if (!inBounds(nx,ny)) continue;
+      if (!isWall(nx,ny,forPacman===true)) res.push({x:nx,y:ny});
+    }
+    return res;
+  };
+
+  while (q.length) {
+    const cur = q.shift();
+    if (cur.x === target.x && cur.y === target.y) break;
+    for (const nb of neigh(cur.x, cur.y)) {
+      if (!seen[nb.y][nb.x]) {
+        seen[nb.y][nb.x] = true;
+        prev[nb.y][nb.x] = cur;
+        q.push(nb);
+      }
+    }
+  }
+
+  // Восстановим путь: идём от цели назад к старту, получаем второй узел
+  let node = target;
+  if (!inBounds(node.x,node.y) || !seen[node.y][node.x]) return null;
+  let prevNode = prev[node.y][node.x];
+  if (!prevNode) return null;
+  while (prevNode && (prevNode.x !== start.x || prevNode.y !== start.y)) {
+    node = prevNode;
+    prevNode = prev[prevNode.y][prevNode.x];
+    if (!prevNode) break;
+  }
+  // Направление из start к node
+  const dx = node.x - start.x;
+  const dy = node.y - start.y;
+  if (dx < 0) return DIR.LEFT;
+  if (dx > 0) return DIR.RIGHT;
+  if (dy < 0) return DIR.UP;
+  if (dy > 0) return DIR.DOWN;
+  return null;
+}
+
+// --- Победа/переход уровня ---
+function levelUpOrFinish() {
+  running = false;
+  if (animationId) cancelAnimationFrame(animationId);
+  AudioSys.stopSiren();
+  AudioSys.stopPower();
+
+  const p = currentPlayer();
+  if (!p) return;
+
+  if (p.level < MAX_LEVEL) {
+    const completedLevel = p.level;
+    p.level += 1;
+    p.score = 0;
+    saveState();
+    updateInfo();
+    showModal('Уровень ' + completedLevel + ' пройден!',
+      'Все пеллеты съедены. Нажмите «ОК», затем «Старт: Уровень ' + p.level + '».');
+    setStatus('Готовы к уровню ' + p.level + '. Призраки быстрее, страх короче.');
+  } else {
+    p.completed = true;
+    saveState();
+    updateInfo();
+    showModal('Игра пройдена!', 'Поздравляем! Вы прошли все 10 уровней.');
+    setStatus('Игра пройдена. Великолепно!');
+  }
+  updateStartButton();
+}
+
+// --- Рендер ---
+function draw() {
+  // фон
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0,0,WIDTH,HEIGHT);
+
+  drawMaze();
+  drawPellets();
+
+  drawGhosts();
+  drawPacman();
+
+  drawHUDOverlay();
+}
+
+function drawMaze() {
+  // Стены
+  for (let y=0;y<ROWS;y++) {
+    for (let x=0;x<COLS;x++) {
+      const cell = grid[y][x];
+      if (cell === CELL_WALL || cell === CELL_DOOR) {
+        ctx.fillStyle = (cell===CELL_DOOR) ? '#4dd0e1' : '#1a237e';
+        ctx.fillRect(x*TILE+1, y*TILE+1, TILE-2, TILE-2);
+        // контур
+        ctx.strokeStyle = '#90caf9';
+        ctx.strokeRect(x*TILE+0.5, y*TILE+0.5, TILE-1, TILE-1);
+      }
+      if (cell === CELL_HOUSE) {
+        ctx.fillStyle = '#0d47a1';
+        ctx.fillRect(x*TILE+4, y*TILE+4, TILE-8, TILE-8);
+      }
+    }
+  }
+}
+
+function drawPellets() {
+  for (let y=0;y<ROWS;y++) {
+    for (let x=0;x<COLS;x++) {
+      if (pellets[y][x]) {
+        ctx.fillStyle = '#ffd54f';
+        ctx.beginPath();
+        ctx.arc(x*TILE + TILE/2, y*TILE + TILE/2, 3, 0, Math.PI*2);
+        ctx.fill();
+      } else if (power[y][x]) {
+        ctx.fillStyle = '#ffab00';
+        ctx.beginPath();
+        ctx.arc(x*TILE + TILE/2, y*TILE + TILE/2, 6, 0, Math.PI*2);
+        ctx.fill();
+      }
+    }
+  }
+}
+
+function drawPacman() {
+  const angleOpen = (Math.sin(player.mouthPhase) * 0.5 + 0.5) * (Math.PI/2.5); // 0..~72°
+  const moving = true;
+  let startAngle = 0, endAngle = 0, rot = 0;
+  switch (player.dir) {
+    case DIR.RIGHT: rot = 0; break;
+    case DIR.LEFT: rot = Math.PI; break;
+    case DIR.UP: rot = -Math.PI/2; break;
+    case DIR.DOWN: rot = Math.PI/2; break;
+  }
+  const mouth = (Math.abs(player.mouthPhase) > 1e-3) ? angleOpen : 0;
+  const x = player.x, y = player.y, r = TILE*0.7/2 * 2; // ~7
+  ctx.fillStyle = '#ffeb3b';
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+  ctx.arc(x, y, TILE*0.7, rot + mouth, rot + Math.PI*2 - mouth);
+  ctx.closePath();
+  ctx.fill();
+  // глаз
+  ctx.fillStyle = '#000';
+  const eyeX = x + Math.cos(rot - Math.PI/2) * 6;
+  const eyeY = y + Math.sin(rot - Math.PI/2) * 6;
+  ctx.beginPath();
+  ctx.arc(eyeX, eyeY, 2, 0, Math.PI*2);
+  ctx.fill();
+}
+
+function drawGhosts() {
+  for (const g of ghosts) {
+    const x = g.x, y = g.y, r = TILE*0.7;
+    let bodyColor = g.color;
+    if (g.mode === 'frightened') bodyColor = '#3f51b5';
+    if (g.mode === 'eyes') bodyColor = '#90a4ae';
+
+    // тело
+    ctx.fillStyle = bodyColor;
+    ctx.beginPath();
+    ctx.arc(x, y, TILE*0.6, Math.PI, 0);
+    ctx.lineTo(x + TILE*0.6, y + TILE*0.6);
+    // “юбка”
+    for (let i=0;i<6;i++){
+      const px = x + TILE*0.6 - (i+1)*TILE*0.2;
+      const py = y + TILE*0.6 + (i%2===0 ? 2 : -2);
+      ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fill();
+
+    // глаза
+    ctx.fillStyle = '#fff';
+    const dx = DIR_V[g.dir].x, dy = DIR_V[g.dir].y;
+    for (const off of [-8,8]) {
+      ctx.beginPath();
+      ctx.arc(x + off*0.25 + dx*2, y - 2 + dy*2, 4, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#1a237e';
+      ctx.beginPath();
+      ctx.arc(x + off*0.25 + dx*4, y - 2 + dy*4, 2, 0, Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+    }
+  }
+}
+
+function drawHUDOverlay() {
+  const p = currentPlayer();
+  if (!p) return;
+  ctx.fillStyle = '#fff';
+  ctx.font = '14px Arial';
+  const text = 'Игрок: ' + p.name +
+    ' | Уровень: ' + p.level + '/' + MAX_LEVEL +
+    ' | Очки: ' + p.score +
+    ' | Жизни: ' + lives +
+    ' | Пеллеты: ' + pelletCount;
+  ctx.fillText(text, 12, HEIGHT - 12);
+}
+
+// --- Ввод ---
+function onKeyDown(e) {
+  const code = e.code || e.key;
+  if (code === 'ArrowLeft' || code === 'KeyA') { keyState.left = true; e.preventDefault(); }
+  else if (code === 'ArrowRight' || code === 'KeyD') { keyState.right = true; e.preventDefault(); }
+  else if (code === 'ArrowUp' || code === 'KeyW') { keyState.up = true; e.preventDefault(); }
+  else if (code === 'ArrowDown' || code === 'KeyS') { keyState.down = true; e.preventDefault(); }
+  else if (code === 'Space') { startOrPause(); e.preventDefault(); }
+  else if (code === 'KeyP') { startOrPause(); e.preventDefault(); }
+}
+function onKeyUp(e) {
+  const code = e.code || e.key;
+  if (code === 'ArrowLeft' || code === 'KeyA') { keyState.left = false; }
+  else if (code === 'ArrowRight' || code === 'KeyD') { keyState.right = false; }
+  else if (code === 'ArrowUp' || code === 'KeyW') { keyState.up = false; }
+  else if (code === 'ArrowDown' || code === 'KeyS') { keyState.down = false; }
+}
+
+// --- Модалка ---
+function showModal(title, text) {
+  modalTitle.textContent = title;
+  modalText.textContent = text;
+  modal.classList.add('open');
+}
+function closeModal() {
+  modal.classList.remove('open');
+}
+
+// --- Утилиты UI ---
+function setHUDPellets() {
+  hudPellets.textContent = 'Пеллеты: ' + pelletCount;
+}
+
+// --- Инициализация ---
+function init() {
+  renderPlayers();
+  resetLevel();
+
+  addPlayerBtn.onclick = addPlayer;
+  startPauseBtn.onclick = startOrPause;
+  resetBtn.onclick = resetField;
+  document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('keyup', onKeyUp);
+
+  setStatus('Выберите игрока или создайте нового, затем нажмите «Старт».');
+  updateStartButton();
+}
+window.addEventListener('load', init);
+
+// --- Вспомогательные функции ---
+function level() {
+  const p = currentPlayer();
+  return p ? p.level : 1;
+}
+
+// --- Победа/финал уже выше ---
+
+</script>
+</body>
+</html>

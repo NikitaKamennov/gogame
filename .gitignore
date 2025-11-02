@@ -1,9 +1,1 @@
-.exe
-*.exe
-*.dll
-*.pdb
-*.log
-*.tmp
-*.zip
-*.7z
-*.rar
+*.exe *.dll *.pdb *.log *.tmp *.zip *.7z *.rar 

@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Сапёр — 10 туров</title>
+<style>
+body { font-family: Arial, sans-serif; max-width: 1200px; margin: 20px auto; padding: 0 16px; color: #222; }
+h1 { margin: 0 0 12px; }
+.row { display: flex; gap: 24px; flex-wrap: wrap; }
+
+.game-panel { flex: 1 1 720px; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background: #fff; }
+.game-panel h2 { margin: 0 0 10px; font-size: 18px; }
+.legend { margin-top: 8px; font-size: 14px; color: #555; }
+
+.board-wrap { position: relative; overflow: auto; padding: 8px; border: 1px solid #eee; border-radius: 8px; background: #fafafa; }
+#board {
+  --cols: 9;
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 28px);
+  grid-auto-rows: 28px;
+  gap: 2px;
+  place-items: center;
+  user-select: none;
+  touch-action: manipulation;
+}
+.cell {
+  width: 28px; height: 28px; line-height: 28px;
+  text-align: center; font-weight: bold; font-size: 14px;
+  border-radius: 4px; cursor: pointer;
+  background: #d0d7de; color: #111; border: 1px solid #9aa3ab;
+}
+.cell.hidden { background: #9aa3ab; border-color: #7e8891; }
+.cell.revealed { background: #e9eef2; border-color: #cfd6dc; cursor: default; }
+.cell.mine { background: #ff5252; color: #fff; }
+.cell.flag { background: #ffeb3b; color: #d32f2f; }
+.cell.disabled { pointer-events: none; opacity: 0.8; }
+
+/* Цвета чисел */
+.n1 { color: #1976d2; }
+.n2 { color: #2e7d32; }
+.n3 { color: #d32f2f; }
+.n4 { color: #512da8; }
+.n5 { color: #ef6c00; }
+.n6 { color: #00838f; }
+.n7 { color: #5d4037; }
+.n8 { color: #424242; }
+
+.hud { margin: 10px 0 0; display: flex; gap: 16px; flex-wrap: wrap; color: #444; }
+
+.panel { flex: 0 0 320px; border: 1px solid #ddd; border-radius: 8px; padding: 16px; background: #fafafa; }
+.panel h2 { margin: 0 0 10px; font-size: 18px; }
+.players { display: flex; flex-wrap: wrap; gap: 8px; }
+.player-btn { padding: 6px 10px; border: 1px solid #999; border-radius: 6px; background: #fff; cursor: pointer; }
+.player-btn:hover { background: #f0f0f0; }
+.player-btn.active { background: #007cba; color: #fff; border-color: #007cba; }
+.add-form { display: flex; gap: 8px; margin-top: 8px; }
+.add-form input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
+.add-form button { padding: 8px 12px; background: #007cba; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.add-form button:hover { background: #005a87; }
+.info { margin-top: 10px; font-size: 14px; color: #444; }
+.actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { padding: 8px 12px; border-radius: 6px; cursor: pointer; border: 1px solid #ccc; background: #eee; }
+.btn:hover { background: #e0e0e0; }
+.btn.primary { background: #28a745; color: #fff; border: none; }
+.btn.primary:hover { background: #1e7e34; }
+.btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+.status { margin-top: 8px; padding: 8px; background: #eef6ff; border: 1px solid #cfe2ff; border-radius: 6px; min-height: 20px; }
+.muted { color: #777; }
+
+/* Модалка */
+.modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 1000; }
+.modal.open { display: flex; }
+.modal-content { width: 90%; max-width: 420px; background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+.modal-content h3 { margin: 0 0 10px; }
+.modal-content p { margin: 0 0 16px; color: #444; }
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.modal-actions .btn { min-width: 100px; }
+
+.nav { margin: 8px 0 16px; }
+.nav a { color: #007cba; text-decoration: none; }
+.nav a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="nav"><a href="/">← Выбор игры</a></div>
+<h1>Сапёр — 10 туров</h1>
+
+<div class="row">
+  <!-- Поле слева -->
+  <div class="game-panel">
+    <h2 id="boardTitle">Поле</h2>
+    <div class="board-wrap">
+      <div id="board" oncontextmenu="return false;"></div>
+    </div>
+    <div class="hud">
+      <div id="hudLevel">Тур: 1/10</div>
+      <div id="hudSize">Размер: 9×9</div>
+      <div id="hudMines">Мины: 10</div>
+      <div id="hudFlags">Флаги: 0/10</div>
+      <div id="hudTimer">Таймер: 00:00</div>
+    </div>
+    <div id="hudHelp" class="legend">ЛКМ — открыть клетку. ПКМ — поставить/снять флаг. Откройте все клетки без мин, чтобы пройти тур.</div>
+  </div>
+
+  <!-- Настройки справа -->
+  <div class="panel">
+    <h2>Игроки</h2>
+    <div id="players" class="players"></div>
+    <div class="add-form">
+      <input id="newPlayerName" placeholder="Имя нового игрока" />
+      <button id="addPlayerBtn">Добавить</button>
+    </div>
+
+    <div id="playerInfo" class="info muted">Игрок не выбран</div>
+
+    <div class="actions">
+      <button id="startBtn" class="btn primary">Старт</button>
+      <button id="resetBtn" class="btn">Сбросить поле</button>
+    </div>
+
+    <div class="legend">
+      - 10 туров: с каждым туром поле больше и мин больше.<br/>
+      - Прогресс и лучшие времена сохраняются локально (в браузере).
+    </div>
+
+    <div id="status" class="status">Выберите игрока или создайте нового, затем нажмите «Старт: Тур 1».</div>
+  </div>
+</div>
+
+<!-- Модалка -->
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-content">
+    <h3 id="modalTitle">Результат</h3>
+    <p id="modalText">Описание</p>
+    <div class="modal-actions">
+      <button id="modalOk" class="btn primary">ОК</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// --- LocalStorage (одна переменная) ---
+const STORAGE_KEY = 'сапёра';
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { players: [], currentPlayerName: '' };
+    const s = JSON.parse(raw);
+    if (!Array.isArray(s.players)) s.players = [];
+    if (typeof s.currentPlayerName !== 'string') s.currentPlayerName = '';
+    return s;
+  } catch (_) {
+    return { players: [], currentPlayerName: '' };
+  }
+}
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+// --- Глобальное состояние ---
+let state = loadState();
+
+// DOM
+const boardEl = document.getElementById('board');
+const boardTitle = document.getElementById('boardTitle');
+const playersWrap = document.getElementById('players');
+const newPlayerName = document.getElementById('newPlayerName');
+const addPlayerBtn = document.getElementById('addPlayerBtn');
+const playerInfo = document.getElementById('playerInfo');
+const startBtn = document.getElementById('startBtn');
+const resetBtn = document.getElementById('resetBtn');
+const statusEl = document.getElementById('status');
+const hudLevel = document.getElementById('hudLevel');
+const hudSize  = document.getElementById('hudSize');
+const hudMines = document.getElementById('hudMines');
+const hudFlags = document.getElementById('hudFlags');
+const hudTimer = document.getElementById('hudTimer');
+const modal = document.getElementById('modal');
+const modalTitle = document.getElementById('modalTitle');
+const modalText = document.getElementById('modalText');
+const modalOk = document.getElementById('modalOk');
+
+// --- Игровые переменные ---
+const MAX_LEVEL = 10;
+let rows = 9, cols = 9, mines = 10;
+let grid = []; // grid[y][x] = { mine, adj, revealed, flagged }
+let revealedCount = 0;
+let flagsCount = 0;
+let firstClick = true;
+let running = false;
+let timerId = null;
+let startTime = 0;
+
+// --- Конфиг уровня: поле и число мин растут ---
+function configForLevel(lvl) {
+  const L = Math.max(1, Math.min(lvl, MAX_LEVEL));
+  if (L === 1) return { rows: 9, cols: 9, mines: 10 };
+  const size = 9 + 2 * (L - 1); // 11,13,...,27
+  const cells = size * size;
+  let m = Math.round(cells * 0.18) + (L - 1); // ~18% + рост
+  if (m >= cells) m = cells - 1;
+  return { rows: size, cols: size, mines: m };
+}
+
+function currentPlayer() {
+  if (!state.currentPlayerName) return null;
+  return state.players.find(p => p.name === state.currentPlayerName) || null;
+}
+
+function ensurePlayerDefaults(p) {
+  if (typeof p.level !== 'number' || p.level < 1) p.level = 1;
+  if (typeof p.completed !== 'boolean') p.completed = false;
+  if (!p.bestTimes || typeof p.bestTimes !== 'object') p.bestTimes = {};
+  if (p.level > MAX_LEVEL) p.level = MAX_LEVEL;
+}
+
+function renderPlayers() {
+  playersWrap.innerHTML = '';
+  state.players.forEach(p => {
+    ensurePlayerDefaults(p);
+    const btn = document.createElement('button');
+    btn.className = 'player-btn' + (p.name === state.currentPlayerName ? ' active' : '');
+    const best = p.bestTimes && p.bestTimes[p.level] ? ' | Лучшее: ' + formatTime(p.bestTimes[p.level]) : '';
+    btn.textContent = p.name;
+    btn.title = 'Тур: ' + p.level + (p.completed ? ' (пройдено)' : '') + best;
+    btn.onclick = function() { selectPlayer(p.name); };
+    playersWrap.appendChild(btn);
+  });
+  if (!state.players.length) {
+    const div = document.createElement('div');
+    div.className = 'muted';
+    div.textContent = 'Пока нет игроков. Создайте нового.';
+    playersWrap.appendChild(div);
+  }
+  updateInfo();
+}
+
+function selectPlayer(name) {
+  state.currentPlayerName = name;
+  let p = state.players.find(x => x.name === name);
+  if (!p) {
+    p = { name: name, level: 1, completed: false, bestTimes: {} };
+    state.players.push(p);
+  }
+  ensurePlayerDefaults(p);
+  saveState();
+  renderPlayers();
+  prepareBoardForPlayer();
+  setStatus('Игрок ' + name + ' выбран.');
+}
+
+function addPlayer() {
+  const name = (newPlayerName.value || '').trim();
+  if (!name) { setStatus('Введите имя игрока', true); return; }
+  if (state.players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+    setStatus('Такой игрок уже существует', true);
+    return;
+  }
+  state.players.push({ name: name, level: 1, completed: false, bestTimes: {} });
+  state.currentPlayerName = name;
+  saveState();
+  newPlayerName.value = '';
+  renderPlayers();
+  prepareBoardForPlayer();
+  setStatus('Игрок ' + name + ' создан. Нажмите «Старт».');
+}
+
+function updateInfo() {
+  const p = currentPlayer();
+  if (!p) {
+    playerInfo.textContent = 'Игрок не выбран';
+    updateStartBtn();
+    return;
+  }
+  ensurePlayerDefaults(p);
+  const best = p.bestTimes[p.level] ? ' | Лучшее: ' + formatTime(p.bestTimes[p.level]) : '';
+  playerInfo.textContent = 'Игрок: ' + p.name + (p.completed ? ' (Игра пройдена)' : '') + ' — Тур: ' + p.level + '/' + MAX_LEVEL + best;
+  updateStartBtn();
+}
+
+function updateStartBtn() {
+  const p = currentPlayer();
+  if (!p) { startBtn.textContent = 'Старт'; startBtn.disabled = false; return; }
+  if (running) { startBtn.textContent = 'Идёт тур...'; startBtn.disabled = true; return; }
+  if (p.completed) { startBtn.textContent = 'Игра пройдена'; startBtn.disabled = true; return; }
+  startBtn.textContent = 'Старт: Тур ' + p.level;
+  startBtn.disabled = false;
+}
+
+function setStatus(msg, isError) {
+  statusEl.textContent = msg;
+  statusEl.style.color = isError ? '#b30000' : '#222';
+}
+
+// --- Доска и логика ---
+function prepareBoardForPlayer() {
+  const p = currentPlayer();
+  const lvl = p ? p.level : 1;
+  const cfg = configForLevel(lvl);
+  rows = cfg.rows; cols = cfg.cols; mines = cfg.mines;
+  boardEl.style.setProperty('--cols', String(cols));
+  boardEl.innerHTML = '';
+  grid = [];
+  for (let y = 0; y < rows; y++) {
+    const row = [];
+    for (let x = 0; x < cols; x++) {
+      row.push({ mine: false, adj: 0, revealed: false, flagged: false });
+      const cell = document.createElement('div');
+      cell.className = 'cell hidden';
+      cell.dataset.x = String(x);
+      cell.dataset.y = String(y);
+      cell.onmousedown = handleMouseDown;
+      cell.oncontextmenu = function(e){ e.preventDefault(); return false; };
+      boardEl.appendChild(cell);
+    }
+    grid.push(row);
+  }
+  revealedCount = 0;
+  flagsCount = 0;
+  firstClick = true;
+  stopTimer();
+  setTimer(0);
+  running = false;
+  updateHUD();
+  boardTitle.textContent = 'Поле — Тур ' + lvl;
+}
+
+function startGame() {
+  const p = currentPlayer();
+  if (!p) { setStatus('Сначала выберите игрока или создайте нового', true); return; }
+  if (p.completed) { setStatus('Игра уже пройдена.', true); return; }
+  prepareBoardForPlayer();
+  running = true;
+  updateStartBtn();
+  setStatus('Тур ' + p.level + ' начался. Удачи!');
+}
+
+function resetBoard() {
+  prepareBoardForPlayer();
+  setStatus('Поле сброшено. Нажмите «Старт».');
+  updateStartBtn();
+}
+
+function updateHUD() {
+  const p = currentPlayer();
+  const lvl = p ? p.level : 1;
+  hudLevel.textContent = 'Тур: ' + lvl + '/' + MAX_LEVEL;
+  hudSize.textContent = 'Размер: ' + cols + '×' + rows;
+  hudMines.textContent = 'Мины: ' + mines;
+  hudFlags.textContent = 'Флаги: ' + flagsCount + '/' + mines;
+}
+
+// Мины ставим после первого клика (кроме самой клетки)
+function plantMines(exX, exY) {
+  let placed = 0;
+  const total = rows * cols;
+  const positions = [];
+  for (let i = 0; i < total; i++) positions.push(i);
+  for (let i = positions.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = positions[i]; positions[i] = positions[j]; positions[j] = t;
+  }
+  for (let idx = 0; idx < positions.length && placed < mines; idx++) {
+    const id = positions[idx];
+    const x = id % cols;
+    const y = Math.floor(id / cols);
+    if (x === exX && y === exY) continue;
+    grid[y][x].mine = true;
+    placed++;
+  }
+  // Подсчёт соседей
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      grid[y][x].adj = countAdj(x, y);
+    }
+  }
+}
+
+function countAdj(x, y) {
+  let c = 0;
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      const nx = x + dx, ny = y + dy;
+      if (nx >= 0 && nx < cols && ny >= 0 && ny < rows && grid[ny][nx].mine) c++;
+    }
+  }
+  return c;
+}
+
+function handleMouseDown(e) {
+  if (!running) return;
+  const cell = e.currentTarget;
+  const x = Number(cell.dataset.x), y = Number(cell.dataset.y);
+  if (e.button === 2 || e.which === 3) {
+    toggleFlag(x, y);
+    return;
+  }
+  reveal(x, y);
+}
+
+function toggleFlag(x, y) {
+  const c = grid[y][x];
+  if (c.revealed) return;
+  c.flagged = !c.flagged;
+  const idx = y * cols + x;
+  const cellEl = boardEl.children[idx];
+  if (c.flagged) {
+    cellEl.classList.add('flag');
+    cellEl.textContent = '⚑';
+    flagsCount++;
+  } else {
+    cellEl.classList.remove('flag');
+    cellEl.textContent = '';
+    flagsCount--;
+  }
+  updateHUD();
+}
+
+function reveal(x, y) {
+  const c = grid[y][x];
+  if (c.revealed || c.flagged) return;
+
+  if (firstClick) {
+    plantMines(x, y);
+    startTimer();
+    firstClick = false;
+  }
+
+  if (c.mine) {
+    c.revealed = true;
+    showAllMines();
+    endGame(false);
+    return;
+  }
+
+  const stack = [{x:x, y:y}];
+  while (stack.length) {
+    const cur = stack.pop();
+    const cx = cur.x, cy = cur.y;
+    const cc = grid[cy][cx];
+    if (cc.revealed || cc.flagged) continue;
+    cc.revealed = true;
+    revealedCount++;
+    const idx = cy * cols + cx;
+    const el = boardEl.children[idx];
+    el.classList.remove('hidden');
+    el.classList.add('revealed');
+    el.classList.remove('flag');
+    el.textContent = '';
+    if (cc.adj > 0) {
+      el.textContent = String(cc.adj);
+      el.classList.add('n' + cc.adj);
+    } else {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = cx + dx, ny = cy + dy;
+          if (nx >= 0 && nx < cols && ny >= 0 && ny < rows) {
+            const nn = grid[ny][nx];
+            if (!nn.revealed && !nn.flagged && !nn.mine) {
+              stack.push({x:nx, y:ny});
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (revealedCount >= rows * cols - mines) {
+    showAllMines(true);
+    endGame(true);
+  }
+}
+
+function showAllMines(disableOnly) {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const c = grid[y][x];
+      const idx = y * cols + x;
+      const el = boardEl.children[idx];
+      el.classList.add('disabled');
+      if (disableOnly) continue;
+      if (c.mine) {
+        el.classList.remove('hidden');
+        el.classList.add('mine');
+        el.textContent = '💣';
+      }
+    }
+  }
+}
+
+// --- Таймер ---
+function startTimer() {
+  stopTimer();
+  startTime = Date.now();
+  timerId = setInterval(function() {
+    const ms = Date.now() - startTime;
+    setTimer(ms);
+  }, 250);
+}
+function stopTimer() {
+  if (timerId) {
+    clearInterval(timerId);
+    timerId = null;
+  }
+}
+function setTimer(ms) {
+  hudTimer.textContent = 'Таймер: ' + formatTime(ms);
+}
+function formatTime(ms) {
+  const total = Math.floor(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+}
+
+// --- Завершение тура ---
+function endGame(win) {
+  running = false;
+  stopTimer();
+  const p = currentPlayer();
+  const elapsed = firstClick ? 0 : (Date.now() - startTime);
+  if (!p) return;
+
+  if (win) {
+    const lvl = p.level;
+    if (!p.bestTimes[lvl] || elapsed < p.bestTimes[lvl]) {
+      p.bestTimes[lvl] = elapsed;
+    }
+    if (p.level < MAX_LEVEL) {
+      const completedLevel = p.level;
+      p.level += 1;
+      saveState();
+      updateInfo();
+      showModal('Тур ' + completedLevel + ' пройден!', 'Вы прошли тур ' + completedLevel + ' за ' + formatTime(elapsed) + '. Нажмите «ОК», затем «Старт: Тур ' + p.level + '».');
+      setStatus('Готовы к туру ' + p.level + '. Поле усложнилось.');
+    } else {
+      p.completed = true;
+      saveState();
+      updateInfo();
+      showModal('Игра пройдена!', 'Поздравляем! Вы мастер сапёра. Время тура: ' + formatTime(elapsed) + '.');
+      setStatus('Игра пройдена. Вы мастер сапёра!');
+    }
+  } else {
+    showModal('Поражение', 'Вы подорвались на мине. Попробуйте снова тот же тур.');
+    setStatus('Поражение. Нажмите «Сбросить поле» или «Старт» для новой попытки.');
+  }
+  updateStartBtn();
+}
+
+// --- Модалка ---
+function showModal(title, text) {
+  modalTitle.textContent = title;
+  modalText.textContent = text;
+  modal.classList.add('open');
+}
+function closeModal() {
+  modal.classList.remove('open');
+}
+modalOk.onclick = function(){ closeModal(); };
+
+// --- Инициализация и события ---
+function init() {
+  renderPlayers();
+  prepareBoardForPlayer();
+  addPlayerBtn.onclick = addPlayer;
+  startBtn.onclick = startGame;
+  resetBtn.onclick = resetBoard;
+  setStatus('Выберите игрока или создайте нового, затем нажмите «Старт».');
+  boardEl.addEventListener('mousedown', function(e){ e.preventDefault(); });
+  updateStartBtn();
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>

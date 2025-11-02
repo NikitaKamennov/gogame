@@ -1,3 +1,3 @@
-module game
+module gamemulti
 
 go 1.25.3
