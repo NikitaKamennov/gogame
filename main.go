@@ -51,11 +51,13 @@ func main() {
   http.HandleFunc("/arkanoid", serveHTML("static/arkanoid.html"))
   http.HandleFunc("/spaceinvaders", serveHTML("static/spiceinvaders.html"))
   http.HandleFunc("/pacman", serveHTML("static/pacman.html"))
+  http.HandleFunc("/bomberman", serveHTML("static/bomberman.html"))
+  http.HandleFunc("/tomato", serveHTML("static/pomodoro.html"))
 
 
 	// Запускаем сервер в фоне
 	go func() {
-		fmt.Println("Игры запущены: Сапёр и Змейка.")
+		fmt.Println("Развёрнут локальный сервер на порту 228")
 		fmt.Println("Сервер: http://localhost:228")
 		fmt.Println("Для выхода нажмите Ctrl+C")
 		if err := http.ListenAndServe(":228", nil); err != nil {

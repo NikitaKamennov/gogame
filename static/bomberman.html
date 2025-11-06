@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Bomberman — 10 уровней</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #2a2a2a;
+      color: #eaeaea;
+      max-width: 1200px;
+      margin: 20px auto;
+      padding: 0 16px;
+    }
+    h1 { margin: 0 0 12px; }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 320px;
+      gap: 24px;
+      align-items: start;
+    }
+    @media (max-width: 1100px) {
+      .row { grid-template-columns: 1fr; }
+    }
+
+    .game-panel {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      background: #fff;
+      color: #222;
+    }
+    .game-panel h2 { margin: 0 0 10px; font-size: 18px; }
+    canvas { border: 1px solid #ccc; background: #000; display: block; border-radius: 6px; }
+    .hud { margin: 10px 0 0; display: flex; gap: 16px; flex-wrap: wrap; color: #444; }
+
+    .panel {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 16px;
+      background: #fafafa;
+      color: #222;
+    }
+    .panel h2 { margin: 0 0 10px; font-size: 18px; }
+    .players { display: flex; flex-wrap: wrap; gap: 8px; }
+    .player-btn { padding: 6px 10px; border: 1px solid #999; border-radius: 6px; background: #fff; cursor: pointer; }
+    .player-btn:hover { background: #f0f0f0; }
+    .player-btn.active { background: #007cba; color: #fff; border-color: #007cba; }
+    .add-form { display: flex; gap: 8px; margin-top: 8px; }
+    .add-form input { flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 6px; }
+    .add-form button { padding: 8px 12px; background: #007cba; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+    .add-form button:hover { background: #005a87; }
+    .info { margin-top: 10px; font-size: 14px; color: #444; }
+    .actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn { padding: 8px 12px; border-radius: 6px; cursor: pointer; border: 1px solid #ccc; background: #eee; color: #111; }
+    .btn:hover { background: #e0e0e0; }
+    .btn.primary { background: #28a745; color: #fff; border: none; }
+    .btn.primary:hover { background: #1e7e34; }
+    .btn[disabled] { opacity: 0.6; cursor: not-allowed; }
+    .status { margin-top: 8px; padding: 8px; background: #eef6ff; border: 1px solid #cfe2ff; border-radius: 6px; min-height: 20px; color: #222; }
+    .muted { color: #777; }
+
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 1000; }
+    .modal.open { display: flex; }
+    .modal-content { width: 90%; max-width: 420px; background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); color: #222; }
+    .modal-content h3 { margin: 0 0 10px; }
+    .modal-content p { margin: 0 0 16px; color: #444; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+    .modal-actions .btn { min-width: 100px; }
+
+    .nav { margin: 8px 0 16px; }
+    .nav a { color: #8ecbff; text-decoration: none; }
+    .nav a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="nav"><a href="/">← Выбор игры</a></div>
+  <h1>Bomberman — 10 уровней</h1>
+
+  <div class="row">
+    <div class="game-panel">
+      <h2 id="fieldTitle">Поле</h2>
+      <canvas id="game" width="560" height="480"></canvas>
+      <div class="hud">
+        <div id="hudPlayer">Игрок: —</div>
+        <div id="hudLevel">Уровень: 1/10</div>
+        <div id="hudLives">Жизни: 3</div>
+        <div id="hudGhosts">Призраки: 0</div>
+        <div id="hudBombs">Бомбы: 0/0</div>
+        <div id="hudSpeed">Скорость: —</div>
+      </div>
+      <div class="legend">
+        Управление: ←/→/↑/↓ или WASD — движение (удерживать). Space — поставить бомбу. P — Пауза/Продолжить.<br/>
+        Задача: уничтожить всех призраков. Взрывы разрушают мягкие блоки и убивают призраков.
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Игроки</h2>
+      <div id="players" class="players"></div>
+      <div class="add-form">
+        <input id="newPlayerName" placeholder="Имя нового игрока" />
+        <button id="addPlayerBtn">Добавить</button>
+      </div>
+      <div id="playerInfo" class="info muted">Игрок не выбран</div>
+      <div class="actions">
+        <button id="startPauseBtn" class="btn primary">Старт</button>
+        <button id="resetBtn" class="btn">Сбросить поле</button>
+      </div>
+      <div class="legend">
+        - 10 уровней: растёт размер поля и число призраков.<br/>
+        - Победа — все призраки уничтожены. На 10 уровне — конец игры.<br/>
+        - Прогресс (уровень) на игрока хранится в браузере.
+      </div>
+      <div id="status" class="status">Выберите игрока или создайте нового, затем нажмите «Старт».</div>
+    </div>
+  </div>
+
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-content">
+      <h3 id="modalTitle">Уровень пройден</h3>
+      <p id="modalText">Описание</p>
+      <div class="modal-actions">
+        <button id="modalOk" class="btn primary">ОК</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Константы и состояние ---
+    const MAX_LEVEL = 10;
+    const TILE = 28;
+    const CELL_EMPTY = 0;
+    const CELL_HARD  = 1;
+    const CELL_SOFT  = 2;
+
+    const STORAGE_KEY = 'bomberman_state';
+
+    // DOM
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const fieldTitle = document.getElementById('fieldTitle');
+
+    const playersWrap = document.getElementById('players');
+    const newPlayerName = document.getElementById('newPlayerName');
+    const addPlayerBtn = document.getElementById('addPlayerBtn');
+    const playerInfo = document.getElementById('playerInfo');
+    const startPauseBtn = document.getElementById('startPauseBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const statusEl = document.getElementById('status');
+
+    const hudPlayer = document.getElementById('hudPlayer');
+    const hudLevel  = document.getElementById('hudLevel');
+    const hudLives  = document.getElementById('hudLives');
+    const hudGhosts = document.getElementById('hudGhosts');
+    const hudBombs  = document.getElementById('hudBombs');
+    const hudSpeed  = document.getElementById('hudSpeed');
+
+    const modal = document.getElementById('modal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalText = document.getElementById('modalText');
+    const modalOk = document.getElementById('modalOk');
+    modalOk.onclick = () => closeModal();
+
+    // LocalStorage
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return { players: [], currentPlayerName: '' };
+        const s = JSON.parse(raw);
+        if (!Array.isArray(s.players)) s.players = [];
+        if (typeof s.currentPlayerName !== 'string') s.currentPlayerName = '';
+        return s;
+      } catch (_) {
+        return { players: [], currentPlayerName: '' };
+      }
+    }
+    function saveState() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+
+    let state = loadState();
+    function currentPlayer() {
+      if (!state.currentPlayerName) return null;
+      return state.players.find(p => p.name === state.currentPlayerName) || null;
+    }
+    function ensurePlayerDefaults(p) {
+      if (typeof p.level !== 'number' || p.level < 1) p.level = 1;
+      if (typeof p.completed !== 'boolean') p.completed = false;
+      if (p.level > MAX_LEVEL) p.level = MAX_LEVEL;
+    }
+    function renderPlayers() {
+      playersWrap.innerHTML = '';
+      state.players.forEach(p => {
+        ensurePlayerDefaults(p);
+        const btn = document.createElement('button');
+        btn.className = 'player-btn' + (p.name === state.currentPlayerName ? ' active' : '');
+        btn.textContent = p.name;
+        btn.title = 'Уровень: ' + p.level + (p.completed ? ' (пройдено)' : '');
+        btn.onclick = function() {
+          selectPlayer(p.name);
+          updateInfo();
+          resetLevel();
+        };
+        playersWrap.appendChild(btn);
+      });
+      if (!state.players.length) {
+        const div = document.createElement('div');
+        div.className = 'muted';
+        div.textContent = 'Пока нет игроков. Создайте нового.';
+        playersWrap.appendChild(div);
+      }
+      updateInfo();
+    }
+    function selectPlayer(name) {
+      state.currentPlayerName = name;
+      let p = state.players.find(x => x.name === name);
+      if (!p) {
+        p = { name: name, level: 1, completed: false };
+        state.players.push(p);
+      }
+      ensurePlayerDefaults(p);
+      saveState();
+      renderPlayers();
+    }
+    function addPlayer() {
+      const name = (newPlayerName.value || '').trim();
+      if (!name) { setStatus('Введите имя игрока', true); return; }
+      if (state.players.some(p => p.name.toLowerCase() === name.toLowerCase())) {
+        setStatus('Такой игрок уже существует', true);
+        return;
+      }
+      state.players.push({ name: name, level: 1, completed: false });
+      state.currentPlayerName = name;
+      saveState();
+      newPlayerName.value = '';
+      renderPlayers();
+      resetLevel();
+      setStatus('Игрок ' + name + ' создан. Нажмите «Старт».');
+    }
+    function updateInfo() {
+      const p = currentPlayer();
+      if (!p) {
+        playerInfo.textContent = 'Игрок не выбран';
+        hudPlayer.textContent = 'Игрок: —';
+        updateStartButton();
+        return;
+      }
+      ensurePlayerDefaults(p);
+      const sz = sizeForLevel(p.level);
+      const sp = speedsForLevel(p.level);
+      playerInfo.textContent = 'Игрок: ' + p.name + (p.completed ? ' (Игра пройдена)' : '') +
+        ' — Уровень: ' + p.level + '/' + MAX_LEVEL +
+        ', Поле: ' + sz.cols + '×' + sz.rows;
+      hudPlayer.textContent = 'Игрок: ' + p.name;
+      hudLevel.textContent  = 'Уровень: ' + p.level + '/' + MAX_LEVEL;
+      hudSpeed.textContent  = 'Скорость (Игрок/Призр.): ' + sp.player.toFixed(0) + '/' + sp.ghost.toFixed(0);
+      updateStartButton();
+    }
+    function updateStartButton() {
+      const p = currentPlayer();
+      if (running) { startPauseBtn.textContent = 'Пауза'; startPauseBtn.disabled = false; return; }
+      if (!p) { startPauseBtn.textContent = 'Старт'; startPauseBtn.disabled = false; return; }
+      if (p.completed) { startPauseBtn.textContent = 'Игра пройдена'; startPauseBtn.disabled = true; return; }
+      startPauseBtn.textContent = 'Старт: Уровень ' + p.level;
+      startPauseBtn.disabled = false;
+    }
+    function setStatus(msg, isError) {
+      statusEl.textContent = msg;
+      statusEl.style.color = isError ? '#b30000' : '#222';
+    }
+
+    // --- Настройки сложности/размеров ---
+    function sizeForLevel(lvl) {
+      const sizes = [
+        {cols:13, rows:11},
+        {cols:13, rows:11},
+        {cols:15, rows:13},
+        {cols:15, rows:13},
+        {cols:17, rows:13},
+        {cols:17, rows:15},
+        {cols:19, rows:15},
+        {cols:19, rows:17},
+        {cols:21, rows:17},
+        {cols:21, rows:17}
+      ];
+      const idx = Math.max(1, Math.min(lvl, MAX_LEVEL)) - 1;
+      return sizes[idx];
+    }
+    function ghostsForLevel(lvl) {
+      return Math.min(10, 3 + Math.floor((lvl - 1) * 0.9) + Math.floor((lvl - 1) / 2));
+    }
+    function bombsMaxForLevel(lvl) {
+      return Math.min(3, 1 + Math.floor((lvl - 1) / 4));
+    }
+    function speedsForLevel(lvl) {
+      const t = (Math.max(1, Math.min(lvl, MAX_LEVEL)) - 1) / (MAX_LEVEL - 1);
+      return {
+        player: 100 + 20 * t,
+        ghost:  80 + 60 * t
+      };
+    }
+
+    // --- Игровые переменные ---
+    let running = false;
+    let animationId = null;
+    let lastTime = 0;
+
+    let COLS = 13;
+    let ROWS = 11;
+    let grid = [];
+    let lives = 3;
+
+    let player = null;
+    let ghosts = [];
+    let bombs = [];
+    let flames = [];
+
+    const DIR = { LEFT:0, RIGHT:1, UP:2, DOWN:3 };
+    const DIR_NONE = -1; // нет движения
+    const DIR_V = [ {x:-1,y:0}, {x:1,y:0}, {x:0,y:-1}, {x:0,y:1} ];
+    const keyState = { left:false, right:false, up:false, down:false };
+
+    // --- Утилиты ---
+    function inBounds(x,y){ return x>=0 && x<COLS && y>=0 && y<ROWS; }
+    function tileCenter(x,y){ return { x: x*TILE + TILE/2, y: y*TILE + TILE/2 }; }
+    function toTile(px,py){ return { tx: Math.floor(px / TILE), ty: Math.floor(py / TILE) }; }
+
+    // Блокирующая ли клетка (можно указать клетку, бомбу на которой следует игнорировать)
+    function isBlockingTile(tx, ty, ignoreBombAt = null) {
+      if (!inBounds(tx,ty)) return true;
+      if (grid[ty][tx] === CELL_HARD || grid[ty][tx] === CELL_SOFT) return true;
+      const bombHere = bombs.some(b => b.tx === tx && b.ty === ty);
+      if (bombHere) {
+        if (ignoreBombAt && ignoreBombAt.tx === tx && ignoreBombAt.ty === ty) {
+          // Разрешаем пройти через собственную бомбу на той клетке, где сейчас стоим
+          return false;
+        }
+        return true;
+      }
+      return false;
+    }
+    function isFlameAt(tx,ty) { return flames.some(f => f.tx === tx && f.ty === ty); }
+
+    function shuffle(arr) {
+      for (let i=arr.length-1;i>0;i--) {
+        const j = Math.floor(Math.random()*(i+1));
+        [arr[i],arr[j]] = [arr[j],arr[i]];
+      }
+      return arr;
+    }
+
+    // --- Генерация лабиринта ---
+    function buildGrid() {
+      grid = Array.from({length: ROWS}, () => Array(COLS).fill(CELL_EMPTY));
+      for (let x=0;x<COLS;x++) { grid[0][x] = CELL_HARD; grid[ROWS-1][x] = CELL_HARD; }
+      for (let y=0;y<ROWS;y++) { grid[y][0] = CELL_HARD; grid[y][COLS-1] = CELL_HARD; }
+
+      for (let y=2;y<ROWS-1;y+=2) {
+        for (let x=2;x<COLS-1;x+=2) {
+          grid[y][x] = CELL_HARD;
+        }
+      }
+
+      const density = 0.62;
+      for (let y=1;y<ROWS-1;y++) {
+        for (let x=1;x<COLS-1;x++) {
+          if (grid[y][x] !== CELL_EMPTY) continue;
+          if (Math.random() < density) grid[y][x] = CELL_SOFT;
+        }
+      }
+
+      const safe = [
+        {x:1,y:1},{x:2,y:1},{x:1,y:2},{x:2,y:2},
+        {x:3,y:1},{x:1,y:3}
+      ];
+      for (const c of safe) if (inBounds(c.x,c.y)) grid[c.y][c.x] = CELL_EMPTY;
+
+      for (let y=1;y<ROWS-1;y++) {
+        for (let x=1;x<COLS-1;x++) {
+          if (grid[y][x] === CELL_SOFT) {
+            const neighbors = [
+              grid[y][x-1], grid[y][x+1], grid[y-1][x], grid[y+1][x]
+            ];
+            if (neighbors.every(v => v !== CELL_EMPTY)) {
+              if (Math.random() < 0.35) grid[y][x] = CELL_EMPTY;
+            }
+          }
+        }
+      }
+    }
+
+    // --- Размещение сущностей ---
+    function placeEntities() {
+      bombs = [];
+      flames = [];
+      lives = 3;
+
+      const p = currentPlayer();
+      const lvl = p ? p.level : 1;
+      const sp = speedsForLevel(lvl);
+
+      const pc = tileCenter(1,1);
+      player = {
+        x: pc.x, y: pc.y,
+        dir: DIR_NONE,           // стартуем стоя на месте
+        desiredDir: null,        // нет желаемого направления без нажатий
+        speed: sp.player,
+        bombsMax: bombsMaxForLevel(lvl),
+        bombsActive: 0,
+        radius: 3
+      };
+
+      ghosts = [];
+      const G = ghostsForLevel(lvl);
+      const colors = ['#ff5252','#80deea','#ffb74d','#9fa8da','#81c784','#e57373','#4dd0e1','#ffe082','#a1887f','#64b5f6'];
+      let freeTiles = [];
+      for (let y=1;y<ROWS-1;y++) {
+        for (let x=1;x<COLS-1;x++) {
+          if (grid[y][x] !== CELL_EMPTY) continue;
+          if (Math.hypot(x-1, y-1) < 4) continue;
+          freeTiles.push({x,y});
+        }
+      }
+      shuffle(freeTiles);
+      for (let i=0; i<G && freeTiles.length; i++) {
+        const t = freeTiles.pop();
+        const c = tileCenter(t.x, t.y);
+        ghosts.push({
+          x: c.x, y: c.y,
+          dir: [DIR.LEFT,DIR.RIGHT,DIR.UP,DIR.DOWN][Math.floor(Math.random()*4)],
+          speed: sp.ghost,
+          color: colors[i % colors.length],
+          alive: true
+        });
+      }
+
+      hudLives.textContent = 'Жизни: ' + lives;
+      hudGhosts.textContent = 'Призраки: ' + ghosts.filter(g=>g.alive).length;
+      hudBombs.textContent = 'Бомбы: ' + player.bombsActive + '/' + player.bombsMax;
+
+      canvas.width = COLS * TILE;
+      canvas.height = ROWS * TILE;
+      fieldTitle.textContent = 'Поле ' + (COLS*TILE) + '×' + (ROWS*TILE);
+
+      draw();
+    }
+
+    // --- Бомбы и взрывы ---
+    const BOMB_FUSE = 2.0;
+    const FLAME_TIME = 0.42;
+
+    function placeBomb() {
+      if (!player) return;
+      if (player.bombsActive >= player.bombsMax) return;
+      const { tx, ty } = toTile(player.x, player.y);
+      if (!inBounds(tx,ty)) return;
+      if (isBlockingTile(tx,ty)) return;
+
+      bombs.push({
+        tx, ty,
+        placedAt: performance.now() / 1000,
+        fuse: BOMB_FUSE,
+        radius: player.radius
+      });
+      player.bombsActive++;
+      hudBombs.textContent = 'Бомбы: ' + player.bombsActive + '/' + player.bombsMax;
+    }
+
+    function updateBombs(dt, now) {
+      for (const b of bombs) b.fuse -= dt;
+      const toExplode = bombs.filter(b => b.fuse <= 0);
+      if (toExplode.length) {
+        for (const b of toExplode) explodeBomb(b, now);
+        bombs = bombs.filter(b => b.fuse > 0);
+      }
+    }
+
+    function explodeBomb(bomb, now) {
+      const tiles = [{ tx: bomb.tx, ty: bomb.ty }];
+
+      for (const d of [DIR.LEFT, DIR.RIGHT, DIR.UP, DIR.DOWN]) {
+        const v = DIR_V[d];
+        for (let r=1; r<=bomb.radius; r++) {
+          const tx = bomb.tx + v.x * r;
+          const ty = bomb.ty + v.y * r;
+          if (!inBounds(tx,ty)) break;
+          if (grid[ty][tx] === CELL_HARD) break;
+          tiles.push({tx,ty});
+          if (grid[ty][tx] === CELL_SOFT) {
+            grid[ty][tx] = CELL_EMPTY;
+            break;
+          }
+        }
+      }
+
+      for (const t of tiles) {
+        flames.push({ tx: t.tx, ty: t.ty, expiresAt: now + FLAME_TIME });
+      }
+
+      for (const other of bombs) {
+        if (other === bomb) continue;
+        if (tiles.some(t => t.tx === other.tx && t.ty === other.ty)) {
+          other.fuse = 0;
+        }
+      }
+
+      for (const g of ghosts) {
+        if (!g.alive) continue;
+        const { tx, ty } = toTile(g.x, g.y);
+        if (tiles.some(t => t.tx === tx && t.ty === ty)) {
+          g.alive = false;
+        }
+      }
+      const pTile = toTile(player.x, player.y);
+      if (tiles.some(t => t.tx === pTile.tx && t.ty === pTile.ty)) {
+        killPlayer();
+      }
+
+      player.bombsActive = Math.max(0, player.bombsActive - 1);
+      hudBombs.textContent = 'Бомбы: ' + player.bombsActive + '/' + player.bombsMax;
+
+      hudGhosts.textContent = 'Призраки: ' + ghosts.filter(g=>g.alive).length;
+      checkVictory();
+    }
+
+    function updateFlames(now) {
+      flames = flames.filter(f => f.expiresAt > now);
+    }
+
+    function killPlayer() {
+      if (!running) return;
+      running = false;
+      if (animationId) cancelAnimationFrame(animationId);
+      lives -= 1;
+      hudLives.textContent = 'Жизни: ' + lives;
+      setStatus('Вы подорвались. Осталось жизней: ' + lives);
+      if (lives <= 0) {
+        gameOver();
+        return;
+      }
+      setTimeout(() => {
+        bombs = [];
+        flames = [];
+        const c = tileCenter(1,1);
+        player.x = c.x; player.y = c.y;
+        player.dir = DIR_NONE; player.desiredDir = null;
+        player.bombsActive = 0;
+        running = true;
+        lastTime = performance.now();
+        animationId = requestAnimationFrame(loop);
+      }, 800);
+    }
+
+    function checkVictory() {
+      const alive = ghosts.filter(g=>g.alive).length;
+      if (alive === 0) {
+        running = false;
+        if (animationId) cancelAnimationFrame(animationId);
+        const p = currentPlayer();
+        if (!p) return;
+        if (p.level < MAX_LEVEL) {
+          const completedLevel = p.level;
+          p.level += 1;
+          saveState();
+          updateInfo();
+          showModal('Уровень ' + completedLevel + ' пройден!',
+            'Все призраки уничтожены. Нажмите «ОК», затем «Старт: Уровень ' + p.level + '».');
+          setStatus('Готовы к уровню ' + p.level + '. Поле и враги станут сложнее.');
+        } else {
+          p.completed = true;
+          saveState();
+          updateInfo();
+          showModal('Игра пройдена!', 'Поздравляем! Вы прошли все 10 уровней.');
+          setStatus('Игра пройдена. Великолепно!');
+        }
+        updateStartButton();
+      }
+    }
+
+    // --- Движение/коллизии ---
+    function canMoveFromTile(cx, cy, dir, ignoreBombAt = null) {
+      const v = DIR_V[dir];
+      const nx = cx + v.x;
+      const ny = cy + v.y;
+      if (!inBounds(nx,ny)) return false;
+      return !isBlockingTile(nx,ny, ignoreBombAt);
+    }
+
+    function moveEntityGrid(e, desiredDir, dt, isPlayer = false) {
+      const {cx, cy, atCenter} = tileCenterSnap(e.x, e.y);
+      const ignoreBombAt = isPlayer ? { tx: cx, ty: cy } : null;
+
+      if (atCenter) {
+        if (desiredDir !== null && desiredDir !== undefined && desiredDir !== DIR_NONE) {
+          if (canMoveFromTile(cx, cy, desiredDir, ignoreBombAt)) {
+            e.dir = desiredDir;
+          }
+        } else {
+          // Нет ввода — остановка на центре тайла
+          e.dir = DIR_NONE;
+        }
+        // Если текущий курс заблокирован — остановиться
+        if (e.dir !== DIR_NONE && !canMoveFromTile(cx, cy, e.dir, ignoreBombAt)) {
+          e.dir = DIR_NONE;
+        }
+      }
+
+      if (e.dir === DIR_NONE) {
+        // Прижать к центру, чтобы не “дрожал”
+        const c = tileCenter(cx, cy);
+        e.x = c.x; e.y = c.y;
+        return;
+      }
+
+      // Движение
+      const v = DIR_V[e.dir];
+      const nx = e.x + v.x * e.speed * dt;
+      const ny = e.y + v.y * e.speed * dt;
+
+      const nextTile = toTile(nx, ny);
+      if (!isBlockingTile(nextTile.tx, nextTile.ty, ignoreBombAt)) {
+        e.x = nx; e.y = ny;
+      } else {
+        const c = tileCenter(cx, cy);
+        e.x = c.x; e.y = c.y;
+      }
+    }
+
+    function moveGhost(g, dt) {
+      const {cx, cy, atCenter} = tileCenterSnap(g.x, g.y);
+      if (atCenter) {
+        const options = [];
+        for (let d=0;d<4;d++) {
+          const back = (d === (g.dir^1));
+          if (back) continue;
+          if (canMoveFromTile(cx,cy,d)) options.push(d);
+        }
+        if (options.length === 0) {
+          for (let d=0;d<4;d++) if (canMoveFromTile(cx,cy,d)) options.push(d);
+        }
+        if (options.length) {
+          g.dir = options[Math.floor(Math.random() * options.length)];
+        }
+      }
+      moveEntityGrid(g, g.dir, dt, false);
+    }
+
+    function tileCenterSnap(x, y) {
+      const cx = Math.floor(x / TILE);
+      const cy = Math.floor(y / TILE);
+      const centerX = cx*TILE + TILE/2;
+      const centerY = cy*TILE + TILE/2;
+      const atCenter = Math.abs(x - centerX) < 2 && Math.abs(y - centerY) < 2;
+      return { cx, cy, atCenter };
+    }
+
+    // --- Игровой цикл ---
+    function loop(time) {
+      const dt = Math.min(0.03, (time - lastTime) / 1000);
+      lastTime = time;
+      update(dt);
+      draw();
+      if (running) animationId = requestAnimationFrame(loop);
+    }
+
+    function readInputDir() {
+      if (keyState.left)  return DIR.LEFT;
+      if (keyState.right) return DIR.RIGHT;
+      if (keyState.up)    return DIR.UP;
+      if (keyState.down)  return DIR.DOWN;
+      return null; // нет ввода — стоим
+    }
+
+    function update(dt) {
+      const now = performance.now() / 1000;
+      const p = currentPlayer();
+      if (!p) return;
+
+      const sp = speedsForLevel(p.level);
+      player.speed = sp.player;
+      for (const g of ghosts) g.speed = sp.ghost;
+
+      // берём направление из ввода; если нет — null (стоп)
+      player.desiredDir = readInputDir();
+
+      moveEntityGrid(player, player.desiredDir, dt, true);
+      for (const g of ghosts) if (g.alive) moveGhost(g, dt);
+
+      for (const g of ghosts) {
+        if (!g.alive) continue;
+        const gt = toTile(g.x, g.y);
+        const pt = toTile(player.x, player.y);
+        if (gt.tx === pt.tx && gt.ty === pt.ty) {
+          killPlayer();
+          return;
+        }
+      }
+
+      updateBombs(dt, now);
+      updateFlames(now);
+
+      const pt = toTile(player.x, player.y);
+      if (isFlameAt(pt.tx, pt.ty)) {
+        killPlayer();
+        return;
+      }
+      for (const g of ghosts) {
+        if (!g.alive) continue;
+        const t = toTile(g.x,g.y);
+        if (isFlameAt(t.tx, t.ty)) {
+          g.alive = false;
+          hudGhosts.textContent = 'Призраки: ' + ghosts.filter(x=>x.alive).length;
+          checkVictory();
+        }
+      }
+    }
+
+    // --- Рендер ---
+    function draw() {
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0,0,canvas.width, canvas.height);
+
+      drawGrid();
+      drawBombs();
+      drawFlames();
+      drawGhosts();
+      drawPlayer();
+      drawHUDOverlay();
+    }
+
+    function drawGrid() {
+      for (let y=0;y<ROWS;y++) {
+        for (let x=0;x<COLS;x++) {
+          const cell = grid[y][x];
+          if (cell === CELL_HARD) {
+            ctx.fillStyle = '#1a237e';
+            ctx.fillRect(x*TILE+1, y*TILE+1, TILE-2, TILE-2);
+            ctx.strokeStyle = '#90caf9';
+            ctx.strokeRect(x*TILE+0.5, y*TILE+0.5, TILE-1, TILE-1);
+          } else if (cell === CELL_SOFT) {
+            ctx.fillStyle = '#5d4037';
+            ctx.fillRect(x*TILE+2, y*TILE+2, TILE-4, TILE-4);
+            ctx.strokeStyle = '#8d6e63';
+            ctx.strokeRect(x*TILE+1.5, y*TILE+1.5, TILE-3, TILE-3);
+          }
+        }
+      }
+    }
+
+    function drawPlayer() {
+      ctx.fillStyle = '#ffeb3b';
+      const r = TILE*0.35;
+      ctx.beginPath();
+      ctx.arc(player.x, player.y, r, 0, Math.PI*2);
+      ctx.fill();
+      // "рот" по направлению, если есть
+      let rot = 0;
+      switch (player.dir) {
+        case DIR.RIGHT: rot = 0; break;
+        case DIR.LEFT: rot = Math.PI; break;
+        case DIR.UP: rot = -Math.PI/2; break;
+        case DIR.DOWN: rot = Math.PI/2; break;
+        default: rot = 0; break;
+      }
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      const mouth = r * 0.6;
+      ctx.moveTo(player.x, player.y);
+      ctx.arc(player.x, player.y, r, rot - 0.3, rot + 0.3);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    function drawGhosts() {
+      for (const g of ghosts) {
+        if (!g.alive) continue;
+        const x = g.x, y = g.y, R = TILE*0.42;
+        ctx.fillStyle = g.color;
+        ctx.beginPath();
+        ctx.arc(x, y, R, Math.PI, 0);
+        ctx.lineTo(x+R, y+R);
+        for (let i=0;i<6;i++){
+          const px = x + R - (i+1)*R*2/6;
+          const py = y + R + (i%2===0 ? 2 : -2);
+          ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        const dx = DIR_V[g.dir].x || 0, dy = DIR_V[g.dir].y || 0;
+        for (const off of [-8,8]) {
+          ctx.beginPath();
+          ctx.arc(x + off*0.18 + dx*2, y - 2 + dy*2, 4, 0, Math.PI*2);
+          ctx.fill();
+          ctx.fillStyle = '#1a237e';
+          ctx.beginPath();
+          ctx.arc(x + off*0.18 + dx*4, y - 2 + dy*4, 2, 0, Math.PI*2);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+        }
+      }
+    }
+
+    function drawBombs() {
+      for (const b of bombs) {
+        const c = tileCenter(b.tx, b.ty);
+        const t = Math.max(0, b.fuse) / BOMB_FUSE;
+        const pulse = 0.85 + 0.15 * Math.sin((1-t) * 12);
+        const r = TILE*0.3 * pulse;
+        ctx.fillStyle = '#263238';
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, r, 0, Math.PI*2);
+        ctx.fill();
+        ctx.strokeStyle = '#ffab00';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(c.x + r*0.7, c.y - r*0.7);
+        ctx.lineTo(c.x + r*1.2, c.y - r*1.2);
+        ctx.stroke();
+      }
+    }
+
+    function drawFlames() {
+      for (const f of flames) {
+        const c = tileCenter(f.tx, f.ty);
+        const tLeft = Math.max(0, f.expiresAt - performance.now()/1000);
+        const a = Math.min(1, tLeft / FLAME_TIME + 0.2);
+        ctx.globalAlpha = a;
+        ctx.fillStyle = '#ff7043';
+        ctx.fillRect(c.x - TILE/2 + 2, c.y - TILE/2 + 2, TILE-4, TILE-4);
+        ctx.fillStyle = '#ffcc80';
+        ctx.fillRect(c.x - TILE/2 + 6, c.y - TILE/2 + 6, TILE-12, TILE-12);
+        ctx.globalAlpha = 1;
+      }
+    }
+
+    function drawHUDOverlay() {
+      const p = currentPlayer();
+      if (!p) return;
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.font = '14px Arial';
+      const ghostsAlive = ghosts.filter(g=>g.alive).length;
+      const text = 'Игрок: ' + p.name +
+        ' | Уровень: ' + p.level + '/' + MAX_LEVEL +
+        ' | Жизни: ' + lives +
+        ' | Призраки: ' + ghostsAlive +
+        ' | Бомбы: ' + player.bombsActive + '/' + player.bombsMax;
+      ctx.fillText(text, 10, canvas.height - 10);
+    }
+
+    // --- Управление / UI ---
+    function startOrPause() {
+      const p = currentPlayer();
+      if (!p) { setStatus('Сначала выберите игрока или создайте нового', true); return; }
+      if (p.completed) { setStatus('Игра уже пройдена.', true); return; }
+      if (!running) {
+        running = true;
+        lastTime = performance.now();
+        animationId = requestAnimationFrame(loop);
+        setStatus('Уровень ' + p.level + ' начат. Уничтожьте всех призраков.');
+      } else {
+        running = false;
+        if (animationId) cancelAnimationFrame(animationId);
+        setStatus('Пауза.');
+      }
+      updateStartButton();
+    }
+
+    function resetField() {
+      running = false;
+      if (animationId) cancelAnimationFrame(animationId);
+      resetLevel();
+      setStatus('Поле сброшено. Нажмите «Старт».');
+      updateStartButton();
+    }
+
+    function resetLevel() {
+      const p = currentPlayer();
+      const lvl = p ? p.level : 1;
+      const sz = sizeForLevel(lvl);
+      COLS = sz.cols;
+      ROWS = sz.rows;
+      buildGrid();
+      placeEntities();
+      updateInfo();
+      draw();
+    }
+
+    function gameOver() {
+      setStatus('Поражение: закончились жизни. Нажмите «Сбросить поле» или «Старт», чтобы попробовать снова.', true);
+      updateStartButton();
+    }
+
+    // --- Ввод ---
+    function onKeyDown(e) {
+      const code = e.code || e.key;
+      if (code === 'ArrowLeft' || code === 'KeyA') { keyState.left = true; e.preventDefault(); }
+      else if (code === 'ArrowRight' || code === 'KeyD') { keyState.right = true; e.preventDefault(); }
+      else if (code === 'ArrowUp' || code === 'KeyW') { keyState.up = true; e.preventDefault(); }
+      else if (code === 'ArrowDown' || code === 'KeyS') { keyState.down = true; e.preventDefault(); }
+      else if (code === 'Space') {
+        if (running) placeBomb();
+        else startOrPause();
+        e.preventDefault();
+      }
+      else if (code === 'KeyP') { startOrPause(); e.preventDefault(); }
+    }
+    function onKeyUp(e) {
+      const code = e.code || e.key;
+      if (code === 'ArrowLeft' || code === 'KeyA') { keyState.left = false; }
+      else if (code === 'ArrowRight' || code === 'KeyD') { keyState.right = false; }
+      else if (code === 'ArrowUp' || code === 'KeyW') { keyState.up = false; }
+      else if (code === 'ArrowDown' || code === 'KeyS') { keyState.down = false; }
+    }
+
+    // --- Модалка ---
+    function showModal(title, text) {
+      modalTitle.textContent = title;
+      modalText.textContent = text;
+      modal.classList.add('open');
+    }
+    function closeModal() {
+      modal.classList.remove('open');
+    }
+
+    // --- Инициализация ---
+    function init() {
+      renderPlayers();
+      resetLevel();
+      addPlayerBtn.onclick = addPlayer;
+      startPauseBtn.onclick = startOrPause;
+      resetBtn.onclick = resetField;
+      document.addEventListener('keydown', onKeyDown);
+      document.addEventListener('keyup', onKeyUp);
+      setStatus('Выберите игрока или создайте нового, затем нажмите «Старт».');
+      updateStartButton();
+    }
+    window.addEventListener('load', init);
+  </script>
+</body>
+</html>
