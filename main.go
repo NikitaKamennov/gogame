@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+//go:generate go run github.com/tc-hib/go-winres@latest make --in=winres.json --out=.
+
 //go:embed static/*.html
 var content embed.FS
 
@@ -53,6 +55,7 @@ func main() {
   http.HandleFunc("/pacman", serveHTML("static/pacman.html"))
   http.HandleFunc("/bomberman", serveHTML("static/bomberman.html"))
   http.HandleFunc("/tomato", serveHTML("static/pomodoro.html"))
+   http.HandleFunc("/tren", serveHTML("static/trenya.html"))
 
 
 	// Запускаем сервер в фоне
