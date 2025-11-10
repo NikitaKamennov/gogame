@@ -1,0 +1,20 @@
+{
+  "Version": {
+    "FileVersion":    "1.0.0.0",
+    "ProductVersion": "1.0.0.0"
+  },
+  "FileInfo": {
+    "CompanyName":      "Your Company",
+    "FileDescription":  "Local Arcade Server",
+    "ProductName":      "Local Arcade",
+    "InternalName":     "local-arcade",
+    "OriginalFilename": "local-arcade.exe",
+    "LegalCopyright":   "© 2025 Your Company"
+  },
+  "IconPath": "assets/app.ico",
+  "Manifest": {
+    "ExecutionLevel": "asInvoker",
+    "DpiAware": true,
+    "UiAccess": false
+  }
+}
