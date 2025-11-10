@@ -52,7 +52,8 @@ func main() {
   http.HandleFunc("/spaceinvaders", serveHTML("static/spiceinvaders.html"))
   http.HandleFunc("/pacman", serveHTML("static/pacman.html"))
   http.HandleFunc("/bomberman", serveHTML("static/bomberman.html"))
-  http.HandleFunc("/tomato", serveHTML("static/pomodoro.html"))
+  http.HandleFunc("/elasto", serveHTML("static/elastomania.html"))
+  
 
 
 	// Запускаем сервер в фоне
