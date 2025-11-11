@@ -1,292 +1,274 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <title>Typing Trainer (QWERTY, EN) — Наметки</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    /* Базовая типографика и сетка */
-    :root {
-      --bg: #0f1216;
-      --panel: #151a21;
-      --text: #e5e7eb;
-      --muted: #9aa3af;
-      --ok: #22c55e;
-      --err: #ef4444;
-      --accent: #60a5fa;
-      --current: #f59e0b;
-      --border: #242b35;
-      --focus: #334155;
-      --shadow: 0 8px 20px rgba(0,0,0,0.35);
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-      --sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
-    }
+<meta charset="UTF-8" />
+<title>Typing Trainer (EN/RU)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+/* Базовая типографика и сетка */
+:root {
+  --bg: #0f1216;
+  --panel: #151a21;
+  --text: #e5e7eb;
+  --muted: #9aa3af;
+  --ok: #22c55e;
+  --err: #ef4444;
+  --accent: #60a5fa;
+  --current: #f59e0b;
+  --border: #242b35;
+  --focus: #334155;
+  --shadow: 0 8px 20px rgba(0,0,0,0.35);
+  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  --sans: Inter, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji";
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: var(--bg); color: var(--text);
+  font-family: var(--sans);
+}
+.wrap { max-width: 1100px; margin: 24px auto; padding: 16px; }
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  padding: 16px;
+}
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.row + .row { margin-top: 12px; }
+label { font-size: 14px; color: var(--muted); }
+select, textarea, input[type="text"], button {
+  background: #0e131a;
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color .2s, box-shadow .2s;
+}
+select:focus, textarea:focus, input[type="text"]:focus {
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px rgba(51,65,85,0.4);
+}
+button { cursor: pointer; background: #111827; border: 1px solid var(--border); }
+button.primary { background: #1f2937; border-color: #374151; }
+button:hover { filter: brightness(1.05); }
 
-    * { box-sizing: border-box; }
-    html, body {
-      margin: 0; padding: 0;
-      background: var(--bg); color: var(--text);
-      font-family: var(--sans);
-    }
+/* Ввод */
+#typingInput {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 22px;
+  line-height: 1.5;
+}
 
-    .wrap {
-      max-width: 900px; margin: 24px auto; padding: 16px;
-    }
+/* Отображение целевой строки */
+.targetBox {
+  margin-top: 8px;
+  background: #0e131a;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  min-height: 84px;
+}
+.lineLabel { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.targetLine {
+  font-family: var(--mono);
+  font-size: 22px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.typed { color: var(--ok); }
+.current { color: var(--current); text-decoration: underline; text-underline-offset: 3px; }
+.rest { color: var(--muted); }
+.nextLine {
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border);
+  font-family: var(--mono); font-size: 16px; color: #8b949e; white-space: pre-wrap;
+}
 
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      box-shadow: var(--shadow);
-      padding: 16px;
-    }
+/* Flash ошибки — теперь выводится в строке статистики */
+.flashErr {
+  display: inline-block; padding: 0px 0px; border-radius: 0px;
+  background: rgba(239,68,68,0.1); color: var(--err);
+  border: 1px solid rgba(239,68,68,0.35); animation: fadeOut 2s ease forwards;
+}
+@keyframes fadeOut { 0%{opacity:1;transform:translateY(0)} 100%{opacity:0;transform:translateY(-3px)} }
 
-    .row {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    .row + .row { margin-top: 12px; }
+/* Сообщения */
+.msg { margin-top: 10px; font-size: 14px; color: #a7f3d0; }
+.msg.warn { color: #fde68a; } .msg.err { color: #fecaca; }
 
-    label { font-size: 14px; color: var(--muted); }
+.controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.modeTabs { display: inline-flex; background: #0e131a; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.modeTabs button { border: none; background: transparent; padding: 10px 14px; font-weight: 600; color: var(--muted); }
+.modeTabs button.active { color: var(--text); background: #111827; }
 
-    select, textarea, input[type="text"], button {
-      background: #0e131a;
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 10px 12px;
-      outline: none;
-      transition: border-color .2s, box-shadow .2s;
-    }
-    select:focus, textarea:focus, input[type="text"]:focus {
-      border-color: var(--focus);
-      box-shadow: 0 0 0 3px rgba(51,65,85,0.4);
-    }
+/* Единственная колонка — весь контент центрируется и тянется на ширину .panel */
+.split { display: block; }
 
-    button {
-      cursor: pointer;
-      background: #111827;
-      border: 1px solid var(--border);
-    }
-    button.primary {
-      background: #1f2937;
-      border-color: #374151;
-    }
-    button:hover {
-      filter: brightness(1.05);
-    }
+/* Подсказки */
+.help { margin-top: 10px; font-size: 12px; color: var(--muted); }
 
-    /* Ввод */
-    #typingInput {
-      width: 100%;
-      font-family: var(--mono);
-      font-size: 22px;
-      line-height: 1.5;
-    }
+/* === Keyboard Assistant === */
+.kbAssistant {
+  margin-top: 10px; position: relative; background: #0e131a;
+  border: 1px solid var(--border); border-radius: 10px; padding: 12px;
+}
+.kbHeader { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; color: var(--muted); font-size: 13px; }
+.kb { position: relative; }
 
-    /* Отображение целевой строки */
-    .targetBox {
-      margin-top: 8px;
-      background: #0e131a;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px;
-      min-height: 84px;
-    }
+.kbRows { display: grid; gap: 6px; }
+.kbRow { display: flex; gap: 6px; justify-content: center; }
+.kbKey {
+  min-width: 36px; height: 40px; padding: 0 8px; border-radius: 8px;
+  border: 1px solid var(--border); background: #111827; color: var(--text);
+  display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 14px; user-select: none; opacity: 0.95;
+}
+.kbKey.space { min-width: 260px; justify-content: center; }
+.kbKey.highlight {
+  background: rgba(96,165,250,0.15); border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96,165,250,0.25) inset, 0 0 12px rgba(96,165,250,0.25);
+}
 
-    .lineLabel {
-      font-size: 12px;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
+/* Руки — PNG-спрайт (10 кадров по горизонтали) */
+#hands {
+  position: absolute;
+  top: 0; left: 0; right: 0; height: 0;
+  pointer-events: none; z-index: 5;
+}
+#hands .hand {
+  display: none; position: absolute;
+  background-image: url('/static/hands2.png');
+  background-repeat: no-repeat;
+  will-change: transform, left, top, background-position;
+}
+#hands .hand.active { display: block; }
 
-    .targetLine {
-      font-family: var(--mono);
-      font-size: 22px;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    .typed { color: var(--ok); }
-    .current {
-      color: var(--current);
-      text-decoration: underline;
-      text-underline-offset: 3px;
-    }
-    .rest { color: var(--muted); }
-
-    .nextLine {
-      margin-top: 10px;
-      padding-top: 10px;
-      border-top: 1px dashed var(--border);
-      font-family: var(--mono);
-      font-size: 16px;
-      color: #8b949e;
-      white-space: pre-wrap;
-    }
-
-    /* Flash ошибки */
-    .flashWrap {
-      margin-top: 8px;
-      min-height: 20px;
-      font-family: var(--mono);
-    }
-    .flashErr {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 8px;
-      background: rgba(239,68,68,0.1);
-      color: var(--err);
-      border: 1px solid rgba(239,68,68,0.35);
-      animation: fadeOut 1s ease forwards;
-    }
-    @keyframes fadeOut {
-      0% { opacity: 1; transform: translateY(0); }
-      100% { opacity: 0; transform: translateY(-3px); }
-    }
-
-    /* Сообщения */
-    .msg {
-      margin-top: 10px;
-      font-size: 14px;
-      color: #a7f3d0;
-    }
-    .msg.warn { color: #fde68a; }
-    .msg.err { color: #fecaca; }
-
-    .controls {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-
-    .modeTabs {
-      display: inline-flex;
-      background: #0e131a;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      overflow: hidden;
-    }
-    .modeTabs button {
-      border: none;
-      background: transparent;
-      padding: 10px 14px;
-      font-weight: 600;
-      color: var(--muted);
-    }
-    .modeTabs button.active {
-      color: var(--text);
-      background: #111827;
-    }
-
-    .split {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 14px;
-    }
-    @media (min-width: 840px) {
-      .split {
-        grid-template-columns: 2fr 1fr;
-      }
-    }
-
-    .help {
-      margin-top: 10px;
-      font-size: 12px;
-      color: var(--muted);
-    }
-  </style>
+/* Переключатель */
+.switch { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; user-select: none; }
+.switch input { accent-color: #60a5fa; }
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="panel">
-      <div class="row controls">
-        <div class="modeTabs" role="tablist" aria-label="Режим">
-          <button id="tabLesson" class="active" role="tab" aria-selected="true">Обучение</button>
-          <button id="tabCustom" role="tab" aria-selected="false">Свой текст</button>
-        </div>
-
-        <div class="row" id="lessonControls" style="margin:0">
-          <label for="lessonSelect">Урок:</label>
-          <select id="lessonSelect"></select>
-          <button id="resetProgress" title="Сбросить прогресс" class="primary">Сброс прогресса</button>
-        </div>
-
-        <div class="row" id="customControls" style="display:none;margin:0">
-          <label for="customText">Текст:</label>
-          <button id="loadCustom" class="primary">Старт</button>
-        </div>
-
-        <div class="row" id="errorControls" style="margin:0">
-  <label for="errorLimitSelect" title="Сколько ошибок можно допустить в строке до перезапуска строки">Лимит ошибок:</label>
-  <select id="errorLimitSelect"></select>
-</div>
-
+<div class="wrap">
+  <div class="panel">
+    <div class="row controls">
+      <div class="modeTabs" role="tablist" aria-label="Режим">
+        <button id="tabLesson" class="active" role="tab" aria-selected="true">Английский</button>
+        <button id="tabLessonRU" role="tab" aria-selected="false">Русский</button>
+        <button id="tabCustom" role="tab" aria-selected="false">Свой текст</button>
       </div>
 
-      <div class="split" style="margin-top: 12px;">
-        <div>
-          <label for="typingInput">Ввод</label>
-          <input id="typingInput" type="text" lang="en" autocomplete="off" spellcheck="false" placeholder="Фокус на поле и печатайте..." />
+      <div class="row" id="lessonControls" style="margin:0">
+        <label for="lessonSelect">Урок:</label>
+        <select id="lessonSelect"></select>
+        <button id="resetProgress" title="Сбросить прогресс" class="primary">Сброс прогресса</button>
+      </div>
 
-          <div class="targetBox">
-            <div class="lineLabel" id="lineInfo">Строка</div>
-            <div class="targetLine" id="targetLine">
-              <!-- Разметка целевой строки: .typed / .current / .rest -->
-            </div>
-            <div class="nextLine" id="nextLine"></div>
+      <div class="row" id="customControls" style="display:none;margin:0">
+        <label for="customText">Текст:</label>
+        <button id="loadCustom" class="primary">Старт</button>
+      </div>
+
+      <div class="row" id="errorControls" style="margin:0">
+        <label for="errorLimitSelect" title="Сколько ошибок можно допустить в строке до перезапуска строки">Лимит ошибок:</label>
+        <select id="errorLimitSelect"></select>
+      </div>
+    </div>
+
+    <div class="split" style="margin-top: 12px;">
+      <div>
+        <label for="typingInput">Ввод</label>
+        <input id="typingInput" type="text" lang="en" autocomplete="off" spellcheck="false" placeholder="Фокус на поле и печатайте..." />
+
+        <div class="targetBox">
+          <div class="lineLabel" id="lineInfo">Строка</div>
+          <div class="targetLine" id="targetLine"><!-- .typed / .current / .rest --></div>
+          <div class="nextLine" id="nextLine"></div>
+        </div>
+
+        <!-- Статистика + ошибка в одной строке -->
+        <div class="row" id="stats" style="margin-top:6px">
+          <label>Статистика:</label>
+          <span id="statStreak" title="Текущая серия без ошибок">Серия: 0</span>
+          <span id="statErrors" title="Ошибки в текущей строке по лимиту">Ошибки: 0/3</span>
+          <span id="statFlash" aria-live="polite"></span>
+        </div>
+
+        <!-- Ассистент: контейнер всегда виден -->
+        <div class="kbAssistant" id="kbAssistant">
+          <div class="kbHeader">
+            <label class="switch" title="Показать/скрыть клавиатуру и руки">
+              <input type="checkbox" id="toggleAssistant" />
+              Клавиатура‑помощник
+            </label>
+            <span id="kbLegend" style="color:#9aa3af">Подсвечивается нужная клавиша и палец</span>
           </div>
 
-          <div class="flashWrap" id="flashWrap"></div>
-          <div class="msg" id="message"></div>
-          <div class="help">
-            Подсказки:
-            - Backspace разрешён для исправления.
-            - ><span id="errorLimitInfo"></span> ошибок в строке — повтор строки с начала.
-            - Вводится только нижний регистр a-z и пробел/простая пунктуация.
+          <div class="kb" id="kb">
+            <div id="hands">
+              <div class="hand lhand" id="lhand4"></div>
+              <div class="hand lhand" id="lhand3"></div>
+              <div class="hand lhand" id="lhand2"></div>
+              <div class="hand lhand" id="lhand1"></div>
+              <div class="hand lhand" id="lhand0"></div>
+              <div class="hand rhand" id="rhand0"></div>
+              <div class="hand rhand" id="rhand1"></div>
+              <div class="hand rhand" id="rhand2"></div>
+              <div class="hand rhand" id="rhand3"></div>
+              <div class="hand rhand" id="rhand4"></div>
+            </div>
+            <div class="kbRows" id="kbRows"></div>
           </div>
         </div>
 
-        <div id="customBox" style="display:none">
-          <label for="customText">Свой текст (по строкам):</label>
-          <textarea id="customText" rows="12" placeholder="Каждая строка — отдельное упражнение. Пример:
+        <div class="msg" id="message"></div>
+        <div class="help">
+          Подсказки:
+          - Backspace разрешён для исправления.
+          - <span id="errorLimitInfo"></span> ошибок в строке — повтор строки с начала.
+          - <span id="helpAllowed">Вводится только нижний регистр a-z, цифры, пробел и базовая пунктуация.</span>
+        </div>
+      </div>
+
+      <div id="customBox" style="display:none; margin-top:12px;">
+        <label for="customText">Свой текст (по строкам):</label>
+        <textarea id="customText" rows="12" placeholder="Каждая строка — отдельное упражнение. Пример:
 hello world
 type this line
 and this one"></textarea>
-        </div>
       </div>
     </div>
   </div>
+</div>
 
-  <script type="module">
-    // ===============================
-    // Программа обучения (наметки)
-    // ===============================
-    // Принцип: домашний ряд -> верхний -> нижний -> словосочетания.
-    // Все строки в lower case, для qwerty en.
-    const curriculum = [
+<script type="module">
+// ===============================
+// Плейсхолдеры учебных программ (пустые, как просили)
+// ===============================
+
+
+const curriculumEN =  [
   {
     id: 'home-1',
     title: 'Домашний ряд 1 (f/j, as/kl)',
     lines: [
-      'f j f j f j f j f j f j f j f j f j f j f j f j',
-      'ff jj ff jj ff jj ff jj ff jj ff jj',
-      'fj fj fj fj fj fj fj fj fj fj fj fj fj fj',
-      'f jf jf jf jf jf jf jf jf jf jf jf j',
-      'as as as as as as as as as as as as as as as',
-      'kl kl kl kl kl kl kl kl kl kl kl kl kl kl',
-      'as kl as kl as kl as kl as kl as kl as kl',
-      'a s a s a s a s a s a s a s a s a s a s',
-      'k l k l k l k l k l k l k l k l k l k l',
-      'f f f j j j f f f j j j f f f j j j',
-      'fj jf fj jf fj jf fj jf fj jf fj jf fj jf',
-      'ff f ff f ff f jj j jj j jj j',
-      'af aj af aj af aj af aj af aj',
-      'sf sj sf sj sf sj sf sj sf sj',
-      'ka kj ka kj ka kj ka kj ka kj',
+      'f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f jff jj ff jj ff jj ff jj ff jj ff jj',
+      'ff jj ff jj ff jj ff jj ff jj ff jjff jj ff jj ff jj ff jj ff jj ff jjff jj ff jj ff jj ff jj ff jj ff jj',
+      'fj fj fj fj fj fj fj fj fj fj fj fj fj fjfj fj fj fj fj kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl fj fjfj fj fj fj fj fj fj fj fj fj fj fj fj fjfj fj fj fj fj fj fj fj fj fj fj fj fj fj',
+      'f jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf j',
+      'as as as as as as as as as as as as as as asas as as as as as as as as as as as as as asas as as as as as as as as as as as as as as',
+      'kl kl kl kl kl kl kl kl kl kl kl kl kl klkl kl kl kl kl kl kl kl kl kl kl kl kl klkl kl kl kl kl kl kl kl kl kl kl kl kl klkl kl kl kl kl kl kl kl kl kl kl kl kl kl',
+      'as kl as kl as kl as kl as kl as kl as klkl kl kl kl kl kl kl kl kl kl kl kl kl klkl kl kl kl kl kl kl kl kl kl kl kl kl kl',
+      'a s a s a s a s a s a s a sfj jf fj jf fj jf fj jf fj jf fj jf fj jf a s a s a skl kl kl  j f j f j f j f j f j f j f j f j f j f j f j f jff jj ff jj ff jj ff j j f j f j f j f j f j f j f j f j f j f j f j f jff jj ff jj ff jj ff jj ff jj j ff jj kl kl kl kl kl kl kl kl kl kl kl',
+      'k l k l k l k l k l k l k l k l k l k lkl kl kl kl kl kl k j f j f j f j f j f j f j f j f j f j f j f j f jff jj ff jj ff jj ff jj ff jj  j f j f j f j f j f j f j f j f j f j f j f j f jff jj ff jj ff jj ff jj ff jj l kl kl kl kl kl kl kl',
+      'f f f j jfj jf fj jf fj jf fj jf fj jf fj jf fj jffj jf fj jf fj jf fj jf fj jf fj jf fj jffj jf fj jf fj jf fj jf fj jf fj jf fj jf j f f f j j j f f f j j j',
+      'fj jf fj jf fj jf fj jf fj jf fj jf fj jffj jf fj jf fj jf fj jf fj jf fj jf fj jffj jf fj jf fj jf fj jf fj jf fj jf fj jffj jf fj jf fj jf fj jf fj jf fj jf fj jffj jf fj jf fj jf fj jf fj jf fj jf fj jf',
+      'ff f ff f ff f jj j jj j jj jaf aj af aj af aj af aj af ajaf aj af aj af aj af aj af ajaf aj af aj af aj af aj af ajaf aj af aj af aj af aj af aj',
+      'af aj af aj af aj af aj af ajaf aj af aj af aj af aj af ajaf aj af aj af aj af aj af ajaf aj af aj af aj af aj af ajaf aj af aj af aj af aj af aj',
+      'sf sj sf sj sf sj sf sj sf sjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kj',
+      'ka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kj',
       'la lj la lj la lj la lj la lj',
       'asf asj ask asf asj ask asf asj ask',
       'jkl jkl jkl jkl jkl jkl',
@@ -651,485 +633,992 @@ and this one"></textarea>
   ]
 }
 ];
-   
+const curriculumRU =  [
+  {
+    id: 'home-1-ru',
+    title: 'Домашний ряд 1 (ф/а, о/л)',
+    lines: [
+      'ф а ф а ф а ф а ф а ф а ф а ф а',
+      'о л о л о л о л о л о л о л',
+      'фф аа оо лл фф аа оо лл',
+      'фа фа фа фа ол ол ол ол',
+      'фо фо фо фо ал ал ал ал',
+      'фл аф ол ла фл аф ол ла',
+      'ф ф ф а а а о о о л л л',
+      'фа ол фо ал фа ол фо ал',
+      'фа ол фа ол фо ал фо ал',
+      'а л а л ф о ф о а л а л'
+    ]
+  },
+  {
+    id: 'home-2-ru',
+    title: 'Домашний ряд 2 (фыва / олджэ п р)',
+    lines: [
+      'фы фы фы ыф ыф ыф ва ва ва ав ав ав',
+      'ро ро ро ор ор ор лд лд лд дл дл дл',
+      'жэ жэ жэ эж эж эж па па па ап ап ап',
+      'фыва фыва фыва олдж олдж олдж',
+      'фо фа ры рл па ро ла до жи эо',
+      'фы фв ва ав ар ра ол ло жэ эж',
+      'фа фы ва ар ро ол дл лд жэ эж',
+      'фыва прол фыва прол фыва прол',
+      'фф ыы вв аа оо лл дд жж ээ рр пп',
+      'фа ры ла до жа эо фа ры ла до жа эо'
+    ]
+  },
+  {
+    id: 'top-row-ru',
+    title: 'Верхний ряд (йцукенгшщзхъ)',
+    lines: [
+      'й ц у к е н г ш щ з х ъ й ц у к е н г ш щ з х ъ',
+      'йй цц уу кк ее нн гг шш щщ зз хх ъъ',
+      'йц цу ук ку ен не гг шщ щз зх хъ',
+      'йцу кен шщз хъй йцу кен шщз хъй',
+      'йцу йцу йцу кене кене кене',
+      'цук уке кен енк неу',
+      'шщ шщ шщ зх зх зх хъ хъ хъ',
+      'йцук енрш? без р: йцук йцук кене кене',
+      'й ц у к е н г ш щ з х ъ й ц у к е н',
+      'йцуке нгшщз хъ йцуке нгшщз хъ'
+    ]
+  },
+  {
+    id: 'bottom-row-ru',
+    title: 'Нижний ряд (ячсмитьбю)',
+    lines: [
+      'я ч с м и т ь б ю я ч с м и т ь б ю',
+      'яя чч сс мм ии тт ьь бб юю',
+      'яч чс см ми ит ть ьб бю',
+      'ячсми ячсми тьбю тьбю',
+      'ячсмить ячсмить бюбюбю',
+      'яс си ми ит тьб бю',
+      'ячс ячс ячс мить мить мить',
+      'я ч я ч с м с м и т и т',
+      'ячсм ячсм мить мить',
+      'я ч с м и т ь б ю ячсмитьбю'
+    ]
+  },
+  {
+    id: 'words-ru',
+    title: 'Связки слов (простые)',
+    lines: [
+      'мама папа лама вата фара',
+      'сало мыло мила сито мата',
+      'лива поле вила вала лава',
+      'гора нора лира пара опора',
+      'сила мастер роса леса осень',
+      'мир соль жар пар шум шорох',
+      'воля доля роль пора пора',
+      'коса коса каша каша касса',
+      'машина лампа лампа мама',
+      'язык мышь быт дом роль',
+      'тихо ровно точно метко',
+      'высота ширина глубина',
+      'утро вечер ночь день',
+      'есть время идти дальше',
+      'не спеши печатай ровно',
+      'держи ритм держи форму',
+      'ровная строка без ошибок',
+      'точность важнее скорости',
+      'сначала медленно потом быстрее',
+      'правильная поза ровная спина',
+      'глаза на строке не вниз',
+      'используй обе руки вместе',
+      'меньше ошибок больше пользы',
+      'повторение формирует навык',
+      'короткие слова затем длиннее'
+    ]
+  },
+  {
+    id: 'words-advanced-ru',
+    title: 'Связки слов (сложные)',
+    lines: [
+      'съешь ещё этих мягких французских булок да выпей чаю',
+      'каждый охотник желает знать где сидит фазан',
+      'в чащах юга жил бы цитрус да но фруктов жаль',
+      'шершавый шёлк шелестит в тишине',
+      'точность прежде скорости уверенность следует',
+      'не смотри на клавиши доверься памяти',
+      'ровные нажатия ритм дыхание осанка',
+      'минимум ошибок максимум обучения со временем',
+      'мелкие привычки складываются в крепкий навык',
+      'короткие серии затем короткие паузы и повтор',
+      'плавно проходи пары йц цу уу оп шщ зх',
+      'разбивай длинные слова на блоки и склеивай обратно',
+      'ты не поднимаешься до уровня целей ты падаешь до уровня систем',
+      'заметь напряжение замедлись вдохни и перезапусти',
+      'чистый прогон лучше скоростного но грязного',
+      'повторяй строки пока не получится без ошибок',
+      'наслаждайся ремеслом и прогресс придёт'
+    ]
+  },
+  {
+    id: 'sentences-ru',
+    title: 'Предложения',
+    lines: [
+      'Дыши спокойно и печатай ровно. Глаза держи на строке.',
+      'Сначала точность, затем скорость. Спешка рождает ошибки.',
+      'Лёгкие нажатия и ровный ритм помогают удерживать форму.',
+      'Если ошибся — сбрось строку и начни заново без оценки.',
+      'Короткие перерывы сохраняют свежесть и снижают усталость.',
+      'Следи за осанкой. Плечи расслабь. Запястья не опускай на стол.',
+      'Повторяй знакомые линии и постепенно усложняй материал.',
+      'Отмечай маленькие победы и продолжай путь.',
+      'Регулярная практика сильнее редких рывков.',
+      'Точность стабильна — скорость придёт естественно.'
+    ]
+  },
+  {
+    id: 'paragraphs-ru',
+    title: 'Абзацы',
+    lines: [
+      'Начни с домашнего ряда и не торопись. Ровные нажатия и устойчивый ритм важнее скорости. Ошибся — спокойно перезапусти строку и продолжай.',
+      'Смотри на экран, а не на клавиатуру. Доверяй раскладке и своим рукам. Чем меньше взглядов вниз, тем быстрее формируется навык.',
+      'Делай короткие серии и небольшие паузы. Это помогает поддерживать концентрацию и снижает напряжение. Помни про осанку и дыхание.',
+      'Увеличивай сложность постепенно: ряды, слова, предложения, абзацы. Не спеши. Стабильная точность — основа роста скорости.',
+      'Замечай прогресс в малом: меньше исправлений, ровнее ритм, чище линии. Сегодня — чуть лучше, чем вчера. Продолжай.'
+    ]
+  },
+  {
+    id: 'paragraphs-advanced-ru',
+    title: 'Абзацы — продвинутые',
+    lines: [
+      'Планируй практику как систему: короткие фокус‑сессии, чёткие цели и измеримая точность. Когда ритм и форма устойчивы, скорость растёт почти сама. Если чувствуешь напряжение — замедлись, выровняй дыхание и вернись к чистому набору.',
+      'Работай блоками: сначала связки сложных пар, затем слова, затем предложения. Разбивай длинные фразы на части и снова объединяй. Чередуй знакомые и новые паттерны, чтобы укреплять навык без перегрузки.',
+      'Помни, что регулярность сильнее разовых усилий. Система выигрывает у вдохновения на дистанции. Поддерживай интерес: отмечай прогресс, сохраняй результаты, возвращайся к старым урокам и улучшай их.'
+    ]
+  }
+];
 
-    // ===============================
-    // Состояние
-    // ===============================
-    const LS_KEYS = {
-      mode: 'tt_mode',
-      lessonIndex: 'tt_lesson_idx',
-      lineIndex: 'tt_line_idx',
-      customLines: 'tt_custom_lines',
-      errorLimit: 'tt_error_limit',
-    };
+// ===============================
+// Состояние
+// ===============================
+const LS_KEYS = {
+  mode: 'tt_mode',                      // 'lesson' | 'ru' | 'custom'
+  lessonIndex: 'tt_lesson_idx',         // EN
+  lineIndex: 'tt_line_idx',             // EN
+  ruLessonIndex: 'tt_ru_lesson_idx',    // RU
+  ruLineIndex: 'tt_ru_line_idx',        // RU
+  customLines: 'tt_custom_lines',
+  errorLimit: 'tt_error_limit',
+  currentStreak: 'tt_current_streak',
+  showAssistant: 'tt_show_assistant',
+};
 
-    let state = {
-      mode: 'lesson',        // 'lesson' | 'custom'
-      lessonIndex: 0,
-      lineIndex: 0,
-      charIndex: 0,
-      errorsInLine: 0,
-      customLines: [],
-      errorLimit: 3
-    };
+let state = {
+  mode: 'lesson',        // 'lesson' (EN) | 'ru' (RU) | 'custom'
+  lessonIndex: 0,        // EN
+  lineIndex: 0,          // EN
+  ruLessonIndex: 0,      // RU
+  ruLineIndex: 0,        // RU
+  charIndex: 0,
+  errorsInLine: 0,
+  customLines: [],
+  errorLimit: 3,
+  currentStreak: 0,
+  showAssistant: false,
+};
 
-    // ===============================
-    // DOM
-    // ===============================
-    const typingInput = document.getElementById('typingInput');
-    const targetLineEl = document.getElementById('targetLine');
-    const nextLineEl = document.getElementById('nextLine');
-    const flashWrap = document.getElementById('flashWrap');
-    const messageEl = document.getElementById('message');
-    const lineInfo = document.getElementById('lineInfo');
+// ===============================
+// DOM
+// ===============================
+const typingInput = document.getElementById('typingInput');
+const targetLineEl = document.getElementById('targetLine');
+const nextLineEl = document.getElementById('nextLine');
+const messageEl = document.getElementById('message');
+const lineInfo = document.getElementById('lineInfo');
 
-    const tabLesson = document.getElementById('tabLesson');
-    const tabCustom = document.getElementById('tabCustom');
-    const lessonSelect = document.getElementById('lessonSelect');
-    const resetBtn = document.getElementById('resetProgress');
+const tabLesson = document.getElementById('tabLesson');
+const tabLessonRU = document.getElementById('tabLessonRU');
+const tabCustom = document.getElementById('tabCustom');
 
-    const customControls = document.getElementById('customControls');
-    const lessonControls = document.getElementById('lessonControls');
+const lessonSelect = document.getElementById('lessonSelect');
+const resetBtn = document.getElementById('resetProgress');
 
-    const customBox = document.getElementById('customBox');
-    const customText = document.getElementById('customText');
-    const loadCustomBtn = document.getElementById('loadCustom');
-    const errorLimitSelect = document.getElementById('errorLimitSelect');
+const customControls = document.getElementById('customControls');
+const lessonControls = document.getElementById('lessonControls');
+const customBox = document.getElementById('customBox');
+const customText = document.getElementById('customText');
+const loadCustomBtn = document.getElementById('loadCustom');
+
+const errorLimitSelect = document.getElementById('errorLimitSelect');
 const errorLimitInfo = document.getElementById('errorLimitInfo');
+const helpAllowed = document.getElementById('helpAllowed');
 
-    // ===============================
-    // Инициализация
-    // ===============================
-    init();
+const statStreak = document.getElementById('statStreak');
+const statErrors = document.getElementById('statErrors');
+const statFlash = document.getElementById('statFlash');
 
-    function init() {
-      // Populate lessons
-      lessonSelect.innerHTML = '';
-      curriculum.forEach((l, idx) => {
-        const opt = document.createElement('option');
-        opt.value = String(idx);
-        opt.textContent = `${idx+1}. ${l.title}`;
-        lessonSelect.appendChild(opt);
-      });
+const kbAssistant = document.getElementById('kbAssistant');
+const toggleAssistant = document.getElementById('toggleAssistant');
+const kbRows = document.getElementById('kbRows');
+const kbEl = document.getElementById('kb');
 
+const handsEl = document.getElementById('hands');
+const handEls = {
+  l4: document.getElementById('lhand4'),
+  l3: document.getElementById('lhand3'),
+  l2: document.getElementById('lhand2'),
+  l1: document.getElementById('lhand1'),
+  l0: document.getElementById('lhand0'),
+  r0: document.getElementById('rhand0'),
+  r1: document.getElementById('rhand1'),
+  r2: document.getElementById('rhand2'),
+  r3: document.getElementById('rhand3'),
+  r4: document.getElementById('rhand4'),
+};
 
-      function onErrorLimitChange() {
+// ===============================
+// Спрайт рук
+// ===============================
+const SPRITE_URL = '/static/hands2.png';
+const HAND_SCALE = 0.72;
+
+const spriteMeta = {
+  loaded: false,
+  width: 0,
+  height: 0,
+  frameW: 0,
+  frameH: 0,
+};
+
+const FINGER_TO_FRAME = {
+  l4: 0, l3: 1, l2: 2, l1: 3, l0: 4,
+  r0: 5, r1: 6, r2: 7, r3: 8, r4: 9,
+};
+
+// ===============================
+// Инициализация
+// ===============================
+init();
+
+async function init() {
+  await loadHandsSprite();
+
+  // Заполнить лимит ошибок 0..30
+  errorLimitSelect.innerHTML = '';
+  for (let i = 0; i <= 30; i++) {
+    const opt = document.createElement('option');
+    opt.value = String(i);
+    opt.textContent = String(i);
+    errorLimitSelect.appendChild(opt);
+  }
+
+  loadProgress();
+
+  // События вкладок
+  tabLesson.addEventListener('click', () => setMode('lesson'));
+  tabLessonRU.addEventListener('click', () => setMode('ru'));
+  tabCustom.addEventListener('click', () => setMode('custom'));
+
+  lessonSelect.addEventListener('change', onLessonChange);
+  resetBtn.addEventListener('click', resetProgress);
+  loadCustomBtn.addEventListener('click', loadCustomText);
+
+  typingInput.addEventListener('keydown', onKeyDown);
+  typingInput.addEventListener('paste', (e) => e.preventDefault());
+
+  errorLimitSelect.addEventListener('change', onErrorLimitChange);
+
+  toggleAssistant.addEventListener('change', () => {
+    state.showAssistant = !!toggleAssistant.checked;
+    saveProgress();
+    updateAssistantVisibility();
+    updateKeyboardHints();
+  });
+
+  window.addEventListener('resize', () => {
+    if (state.showAssistant) updateKeyboardHints();
+  });
+
+  toggleAssistant.checked = !!state.showAssistant;
+
+  // UI — первичное применение
+  updateModeUI(true);
+  errorLimitSelect.value = String(state.errorLimit ?? 3);
+  updateErrorLimitInfo();
+  updateStats();
+
+  ensureFocus();
+  render();
+}
+
+function ensureFocus() { setTimeout(() => typingInput.focus(), 0); }
+
+// ===============================
+// Загрузка спрайта
+// ===============================
+function loadHandsSprite() {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.src = SPRITE_URL;
+    img.onload = () => {
+      spriteMeta.loaded = true;
+      spriteMeta.width = img.naturalWidth || img.width;
+      spriteMeta.height = img.naturalHeight || img.height;
+      spriteMeta.frameW = Math.round(spriteMeta.width / 10);
+      spriteMeta.frameH = spriteMeta.height;
+      setupHandSprites();
+      updateKeyboardHints();
+      resolve();
+    };
+    img.onerror = () => resolve();
+  });
+}
+function setupHandSprites() {
+  if (!spriteMeta.loaded) return;
+  Object.values(handEls).forEach(el => {
+    if (!el) return;
+    el.style.backgroundImage = `url('${SPRITE_URL}')`;
+    el.style.backgroundRepeat = 'no-repeat';
+    el.style.width = `${spriteMeta.frameW}px`;
+    el.style.height = `${spriteMeta.frameH}px`;
+    el.style.transformOrigin = 'top left';
+    el.style.transform = `scale(${HAND_SCALE})`;
+  });
+}
+function setHandFrame(el, frameIndex) {
+  if (!el || !spriteMeta.loaded) return;
+  const offsetX = -(frameIndex * spriteMeta.frameW);
+  el.style.backgroundPosition = `${offsetX}px 0px`;
+}
+
+// ===============================
+// Режимы и прогресс
+// ===============================
+function setMode(mode) {
+  if (mode !== 'lesson' && mode !== 'ru' && mode !== 'custom') return;
+  state.mode = mode;
+  // Сброс позиции в начале новой сессии
+  state.charIndex = 0;
+  state.errorsInLine = 0;
+  // Применить UI, пересобрать клавиатуру и выпадающий список уроков
+  updateModeUI();
+  saveProgress();
+  render();
+  ensureFocus();
+}
+
+function updateModeUI(initial = false) {
+  // Tabs
+  tabLesson.classList.toggle('active', state.mode === 'lesson');
+  tabLessonRU.classList.toggle('active', state.mode === 'ru');
+  tabCustom.classList.toggle('active', state.mode === 'custom');
+
+  tabLesson.setAttribute('aria-selected', String(state.mode === 'lesson'));
+  tabLessonRU.setAttribute('aria-selected', String(state.mode === 'ru'));
+  tabCustom.setAttribute('aria-selected', String(state.mode === 'custom'));
+
+  const isLesson = state.mode === 'lesson' || state.mode === 'ru';
+  lessonControls.style.display = isLesson ? 'flex' : 'none';
+  customControls.style.display = state.mode === 'custom' ? 'flex' : 'none';
+  customBox.style.display = state.mode === 'custom' ? 'block' : 'none';
+
+  // Input lang + help текст
+  typingInput.setAttribute('lang', state.mode === 'ru' ? 'ru' : 'en');
+  helpAllowed.textContent = state.mode === 'ru'
+    ? 'Вводится только нижний регистр а-я, ё, цифры, пробел и базовая пунктуация.'
+    : 'Вводится только нижний регистр a-z, цифры, пробел и базовая пунктуация.';
+
+  // Наполнить список уроков подходящим массивом
+  populateLessonSelect();
+
+  // Выставить текущее значение select по прогрессу режима
+  lessonSelect.value = String(state.mode === 'ru' ? state.ruLessonIndex : state.lessonIndex);
+
+  // Пересобрать клавиатуру в нужной раскладке
+  buildKeyboard(state.mode === 'ru' ? 'ru' : 'en');
+
+  // Обновить ассистент видимость
+  updateAssistantVisibility();
+
+  if (!initial) updateKeyboardHints();
+}
+
+function populateLessonSelect() {
+  const list = state.mode === 'ru' ? curriculumRU : curriculumEN;
+  lessonSelect.innerHTML = '';
+  list.forEach((l, idx) => {
+    const opt = document.createElement('option');
+    opt.value = String(idx);
+    opt.textContent = `${idx + 1}. ${l.title}`;
+    lessonSelect.appendChild(opt);
+  });
+}
+
+function onLessonChange() {
+  const idx = Number(lessonSelect.value) || 0;
+  if (state.mode === 'ru') {
+    state.ruLessonIndex = idx;
+    state.ruLineIndex = 0;
+  } else {
+    state.lessonIndex = idx;
+    state.lineIndex = 0;
+  }
+  state.charIndex = 0;
+  state.errorsInLine = 0;
+  saveProgress();
+  render();
+  ensureFocus();
+}
+
+function resetProgress() {
+  if (!confirm('Сбросить прогресс обучения для текущего режима?')) return;
+
+  if (state.mode === 'ru') {
+    state.ruLessonIndex = 0;
+    state.ruLineIndex = 0;
+  } else {
+    state.lessonIndex = 0;
+    state.lineIndex = 0;
+  }
+  state.charIndex = 0;
+  state.errorsInLine = 0;
+  state.currentStreak = 0;
+
+  saveProgress();
+  lessonSelect.value = '0';
+  flashMessage('Прогресс сброшен', 'warn');
+  updateStats();
+  render();
+  ensureFocus();
+}
+
+function loadCustomText() {
+  const text = (customText.value || '').replace(/\r/g, '');
+  const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
+  if (!lines.length) {
+    flashMessage('Введите строки в «Свой текст».', 'err');
+    return;
+  }
+  state.customLines = lines;
+  state.lineIndex = 0;
+  state.charIndex = 0;
+  state.errorsInLine = 0;
+  setMode('custom');
+  saveCustomToLS(lines);
+  saveProgress();
+  render();
+  ensureFocus();
+}
+
+function getLinesForMode() {
+  if (state.mode === 'lesson') {
+    const lesson = curriculumEN[state.lessonIndex] || curriculumEN[0];
+    return Array.isArray(lesson?.lines) ? lesson.lines : [];
+  }
+  if (state.mode === 'ru') {
+    const lesson = curriculumRU[state.ruLessonIndex] || curriculumRU[0];
+    return Array.isArray(lesson?.lines) ? lesson.lines : [];
+  }
+  return state.customLines || [];
+}
+
+// ===============================
+// Рендер
+// ===============================
+function render() {
+  const srcLines = getLinesForMode();
+
+  if (!srcLines.length) {
+    targetLineEl.innerHTML = '<span class="rest">Нет строк для тренировки</span>';
+    nextLineEl.textContent = '';
+    lineInfo.textContent = 'Строка';
+    updateErrorLimitInfo();
+    updateStats();
+    updateKeyboardHints();
+    return;
+  }
+
+  // Текущие индексы для выбранного режима
+  if (state.mode === 'ru') {
+    if (state.ruLineIndex >= srcLines.length) state.ruLineIndex = srcLines.length - 1;
+  } else if (state.mode === 'lesson') {
+    if (state.lineIndex >= srcLines.length) state.lineIndex = srcLines.length - 1;
+  }
+
+  const curLineIndex = (state.mode === 'ru') ? state.ruLineIndex
+                     : (state.mode === 'lesson') ? state.lineIndex
+                     : state.lineIndex;
+
+  const line = normalizeLine(srcLines[curLineIndex]);
+  const typed = line.slice(0, state.charIndex);
+  const currentChar = line[state.charIndex] ?? '';
+  const rest = line.slice(state.charIndex + (currentChar ? 1 : 0));
+
+  typingInput.value = typed;
+  lineInfo.textContent = `Строка ${curLineIndex + 1} из ${srcLines.length}`;
+
+  const typedHtml = escapeHtml(typed);
+  const currentHtml = currentChar ? `<span class="current">${escapeHtml(currentChar)}</span>` : '';
+  const restHtml = escapeHtml(rest);
+  targetLineEl.innerHTML = `<span class="typed">${typedHtml}</span>${currentHtml}<span class="rest">${restHtml}</span>`;
+
+  const next = srcLines[curLineIndex + 1];
+  nextLineEl.textContent = next ? `Следующая: ${next}` : '';
+
+  if (state.charIndex > 0) messageEl.textContent = '';
+
+  updateErrorLimitInfo();
+  updateStats();
+  updateKeyboardHints();
+}
+
+// ===============================
+// Ввод
+// ===============================
+function onKeyDown(e) {
+  const srcLines = getLinesForMode();
+  if (!srcLines.length) return;
+
+  if (e.key === 'Tab' || e.key === 'Escape') { e.preventDefault(); return; }
+  if (e.key === 'Enter') { e.preventDefault(); return; }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.metaKey || e.ctrlKey || e.altKey) {
+    return;
+  }
+
+  const curLineIndex = (state.mode === 'ru') ? state.ruLineIndex
+                     : (state.mode === 'lesson') ? state.lineIndex
+                     : state.lineIndex;
+
+  const lineRaw = srcLines[curLineIndex] || '';
+  const line = normalizeLine(lineRaw);
+
+  if (e.key === 'Backspace') {
+    e.preventDefault();
+    if (state.charIndex > 0) {
+      state.charIndex -= 1;
+      typingInput.value = line.slice(0, state.charIndex);
+      render();
+    }
+    return;
+  }
+
+  const ch = toTrainerChar(e.key);
+  if (!ch) {
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      registerError(e.key);
+      return;
+    }
+    e.preventDefault();
+    return;
+  }
+
+  const expected = line[state.charIndex] || '';
+  if (expected === '') { e.preventDefault(); return; }
+
+  e.preventDefault();
+  if (ch === expected) {
+    state.charIndex += 1;
+    state.currentStreak = (state.currentStreak || 0) + 1;
+    updateStats();
+    saveProgress();
+
+    if (state.charIndex >= line.length) {
+      onLineCompleted();
+    } else {
+      render();
+    }
+  } else {
+    registerError(ch);
+  }
+}
+
+function onLineCompleted() {
+  state.charIndex = 0;
+  const srcLines = getLinesForMode();
+
+  // Перейти к следующей строке в соответствующем режиме
+  if (state.mode === 'ru') {
+    state.ruLineIndex += 1;
+    state.errorsInLine = 0;
+    const lessonLines = (curriculumRU[state.ruLessonIndex] || {}).lines || [];
+    if (state.ruLineIndex >= lessonLines.length) {
+      state.ruLessonIndex += 1;
+      state.ruLineIndex = 0;
+      if (state.ruLessonIndex >= curriculumRU.length && curriculumRU.length > 0) {
+        state.ruLessonIndex = curriculumRU.length - 1;
+        state.ruLineIndex = (curriculumRU[state.ruLessonIndex].lines.length - 1) || 0;
+        flashMessage('Программа на русском завершена.', 'warn');
+      } else if (curriculumRU.length > 0) {
+        flashMessage(`Урок «${curriculumRU[state.ruLessonIndex].title}»`, 'warn');
+      }
+      lessonSelect.value = String(state.ruLessonIndex);
+    }
+  } else if (state.mode === 'lesson') {
+    state.lineIndex += 1;
+    state.errorsInLine = 0;
+    const lessonLines = (curriculumEN[state.lessonIndex] || {}).lines || [];
+    if (state.lineIndex >= lessonLines.length) {
+      state.lessonIndex += 1;
+      state.lineIndex = 0;
+      if (state.lessonIndex >= curriculumEN.length && curriculumEN.length > 0) {
+        state.lessonIndex = curriculumEN.length - 1;
+        state.lineIndex = (curriculumEN[state.lessonIndex].lines.length - 1) || 0;
+        flashMessage('Программа обучения завершена. Можно повторять или перейти к «Свой текст».', 'warn');
+      } else if (curriculumEN.length > 0) {
+        flashMessage(`Урок «${curriculumEN[state.lessonIndex].title}»`, 'warn');
+      }
+      lessonSelect.value = String(state.lessonIndex);
+    }
+  } else {
+    // custom
+    state.lineIndex += 1;
+    state.errorsInLine = 0;
+    if (state.lineIndex >= srcLines.length) {
+      state.lineIndex = srcLines.length - 1;
+      flashMessage('Все строки из «Свой текст» набраны.', 'warn');
+    }
+  }
+
+  saveProgress();
+  render();
+}
+
+function resetCurrentLineWithMessage(msg) {
+  state.charIndex = 0;
+  state.errorsInLine = 0;
+  typingInput.value = '';
+  flashMessage(msg, 'err');
+  render();
+}
+
+// ===============================
+// Flash/сообщения/статистика
+// ===============================
+let flashTimer = null;
+function showFlashError(ch) {
+  clearTimeout(flashTimer);
+  if (statFlash) {
+    statFlash.innerHTML = `<span class="flashErr">Ошибка: ${escapeHtml(ch)}</span>`;
+    flashTimer = setTimeout(() => { statFlash.innerHTML = ''; }, 2000);
+  }
+}
+function flashMessage(text, type = '') {
+  messageEl.textContent = text;
+  messageEl.classList.remove('warn', 'err');
+  if (type) messageEl.classList.add(type);
+}
+function updateStats() {
+  if (statStreak) statStreak.textContent = `Серия: ${state.currentStreak || 0}`;
+  if (statErrors) statErrors.textContent = `Ошибки: ${state.errorsInLine || 0}/${state.errorLimit || 0}`;
+}
+function registerError(displayCh) {
+  state.errorsInLine += 1;
+  state.currentStreak = 0;
+  showFlashError(displayCh);
+  saveProgress();
+  updateStats();
+  if (state.errorsInLine > state.errorLimit) {
+    resetCurrentLineWithMessage('Слишком много ошибок. Повторим строку.');
+  } else {
+    render();
+  }
+}
+function onErrorLimitChange() {
   const v = Number(errorLimitSelect.value);
   const clamped = clamp(Number.isFinite(v) ? v : 3, 0, 30);
   state.errorLimit = clamped;
   saveProgress();
   updateErrorLimitInfo();
+  updateStats();
   ensureFocus();
 }
-
 function updateErrorLimitInfo() {
   if (errorLimitInfo) errorLimitInfo.textContent = String(state.errorLimit);
 }
 
-      // Load progress
-      loadProgress();
+// ===============================
+// Утилиты
+// ===============================
+function normalizeLine(s) { return (s || '').toLowerCase(); }
 
-      // Apply UI from state
-      updateModeUI();
-      lessonSelect.value = String(state.lessonIndex);
-
-      // Events
-      tabLesson.addEventListener('click', () => setMode('lesson'));
-      tabCustom.addEventListener('click', () => setMode('custom'));
-      lessonSelect.addEventListener('change', onLessonChange);
-      resetBtn.addEventListener('click', resetProgress);
-      loadCustomBtn.addEventListener('click', loadCustomText);
-
-      typingInput.addEventListener('keydown', onKeyDown);
-      typingInput.addEventListener('paste', (e) => e.preventDefault());
-
-
-
-
-
-      // ДОБАВИТЬ: заполнить лимиты 0..30
-errorLimitSelect.innerHTML = '';
-for (let i = 0; i <= 30; i++) {
-  const opt = document.createElement('option');
-  opt.value = String(i);
-  opt.textContent = String(i);
-  errorLimitSelect.appendChild(opt);
+function toTrainerChar(key) {
+  // Разрешённые символы зависят от режима
+  if (key === ' ') return ' ';
+  if (key.length === 1) {
+    const ch = key.toLowerCase();
+    if (state.mode === 'ru') {
+      // RU: а-я, ё, цифры и базовая пунктуация
+      if (/[а-яё0-9\.\,;\'\/\-\=\`]/i.test(ch)) return ch;
+    } else {
+      // EN/custom: a-z, цифры и базовая пунктуация
+      if (/[a-z0-9\.\,;\'\/\-\=\`]/.test(ch)) return ch;
+    }
+  }
+  return '';
 }
 
-// ...после loadProgress();
-errorLimitSelect.value = String(state.errorLimit ?? 3);
-errorLimitSelect.addEventListener('change', onErrorLimitChange);
+function escapeHtml(s) {
+  return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 
-// первичная отрисовка значения в подсказке
-updateErrorLimitInfo();
+// ===============================
+// Сохранение/загрузка прогресса
+// ===============================
+function saveProgress() {
+  try {
+    localStorage.setItem(LS_KEYS.mode, state.mode);
+    localStorage.setItem(LS_KEYS.errorLimit, String(state.errorLimit));
+    localStorage.setItem(LS_KEYS.currentStreak, String(state.currentStreak || 0));
+    localStorage.setItem(LS_KEYS.showAssistant, state.showAssistant ? '1' : '0');
 
-      // First render
-      ensureFocus();
-      render();
+    // EN
+    localStorage.setItem(LS_KEYS.lessonIndex, String(state.lessonIndex));
+    localStorage.setItem(LS_KEYS.lineIndex, String(state.lineIndex));
+
+    // RU
+    localStorage.setItem(LS_KEYS.ruLessonIndex, String(state.ruLessonIndex));
+    localStorage.setItem(LS_KEYS.ruLineIndex, String(state.ruLineIndex));
+
+    if (state.mode === 'custom' && state.customLines.length) {
+      saveCustomToLS(state.customLines);
     }
+  } catch {}
+}
+function loadProgress() {
+  try {
+    const mode = localStorage.getItem(LS_KEYS.mode);
+    if (mode === 'custom' || mode === 'lesson' || mode === 'ru') state.mode = mode;
 
-    function ensureFocus() {
-      setTimeout(() => typingInput.focus(), 0);
-    }
+    const errLimit = Number(localStorage.getItem(LS_KEYS.errorLimit));
+    if (!Number.isNaN(errLimit)) state.errorLimit = clamp(errLimit, 0, 30);
 
-    // ===============================
-    // Режимы и прогресс
-    // ===============================
-    function setMode(mode) {
-      state.mode = mode;
-      saveProgress();
+    const curStreak = Number(localStorage.getItem(LS_KEYS.currentStreak));
+    if (!Number.isNaN(curStreak)) state.currentStreak = Math.max(0, curStreak);
 
-      // Tabs
-      tabLesson.classList.toggle('active', mode === 'lesson');
-      tabCustom.classList.toggle('active', mode === 'custom');
-      tabLesson.setAttribute('aria-selected', String(mode === 'lesson'));
-      tabCustom.setAttribute('aria-selected', String(mode === 'custom'));
+    const showAssistantRaw = localStorage.getItem(LS_KEYS.showAssistant);
+    state.showAssistant = showAssistantRaw === '1';
 
-      updateModeUI();
+    // EN progress
+    const lessonIndex = Number(localStorage.getItem(LS_KEYS.lessonIndex));
+    const lineIndex = Number(localStorage.getItem(LS_KEYS.lineIndex));
+    if (!Number.isNaN(lessonIndex)) state.lessonIndex = Math.max(0, lessonIndex);
+    if (!Number.isNaN(lineIndex)) state.lineIndex = Math.max(0, lineIndex);
 
-      // Сброс позиции в начале новой сессии
-      state.lineIndex = 0;
-      state.charIndex = 0;
-      state.errorsInLine = 0;
+    // RU progress
+    const ruLessonIndex = Number(localStorage.getItem(LS_KEYS.ruLessonIndex));
+    const ruLineIndex = Number(localStorage.getItem(LS_KEYS.ruLineIndex));
+    if (!Number.isNaN(ruLessonIndex)) state.ruLessonIndex = Math.max(0, ruLessonIndex);
+    if (!Number.isNaN(ruLineIndex)) state.ruLineIndex = Math.max(0, ruLineIndex);
 
-      // При custom, если пусто — показываем textarea
-      if (mode === 'custom') {
-        const lsLines = loadCustomFromLS();
-        if (lsLines.length && state.customLines.length === 0) {
-          state.customLines = lsLines;
-        }
-      }
-
-      saveProgress();
-      render();
-      ensureFocus();
-    }
-
-    function updateModeUI() {
-      const lesson = state.mode === 'lesson';
-      lessonControls.style.display = lesson ? 'flex' : 'none';
-      customControls.style.display = lesson ? 'none' : 'flex';
-      customBox.style.display = lesson ? 'none' : 'block';
-    }
-
-    function onLessonChange() {
-      state.lessonIndex = Number(lessonSelect.value) || 0;
-      state.lineIndex = 0;
-      state.charIndex = 0;
-      state.errorsInLine = 0;
-      saveProgress();
-      render();
-      ensureFocus();
-    }
-
-    function resetProgress() {
-      if (!confirm('Сбросить прогресс обучения?')) return;
-      state.lessonIndex = 0;
-      state.lineIndex = 0;
-      state.charIndex = 0;
-      state.errorsInLine = 0;
-      saveProgress();
-      lessonSelect.value = '0';
-      flashMessage('Прогресс сброшен', 'warn');
-      render();
-      ensureFocus();
-    }
-
-    function loadCustomText() {
-      const text = (customText.value || '').replace(/\r/g, '');
-      const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
-
-      if (!lines.length) {
-        flashMessage('Введите строки в «Свой текст».', 'err');
-        return;
-      }
-
-      state.customLines = lines;
-      state.lineIndex = 0;
-      state.charIndex = 0;
-      state.errorsInLine = 0;
-      setMode('custom');
-
-      saveCustomToLS(lines);
-      saveProgress();
-      render();
-      ensureFocus();
-    }
-
-    function getLinesForMode() {
-      if (state.mode === 'lesson') {
-        const lesson = curriculum[state.lessonIndex] || curriculum[0];
-        return lesson.lines || [];
-      }
-      return state.customLines || [];
-    }
-
-    // ===============================
-    // Рендер
-    // ===============================
-    function render() {
-      const srcLines = getLinesForMode();
-      if (!srcLines.length) {
-        targetLineEl.innerHTML = '<span class="rest">Нет строк для тренировки</span>';
-        nextLineEl.textContent = '';
-        lineInfo.textContent = 'Строка';
-        return;
-      }
-
-      // Корректируем индексы на всякий случай
-      if (state.lineIndex >= srcLines.length) {
-        state.lineIndex = srcLines.length - 1;
-      }
-      const line = normalizeLine(srcLines[state.lineIndex]);
-      const typed = line.slice(0, state.charIndex);
-      const currentChar = line[state.charIndex] ?? '';
-      const rest = line.slice(state.charIndex + (currentChar ? 1 : 0));
-
-      // Обновляем инпут — всегда держим его равным набранному
-      typingInput.value = typed;
-
-      lineInfo.textContent = `Строка ${state.lineIndex + 1} из ${srcLines.length}`;
-
-      // Разметка целевой строки
-      const typedHtml = escapeHtml(typed);
-      const currentHtml = currentChar ? `<span class="current">${escapeHtml(currentChar)}</span>` : '';
-      const restHtml = escapeHtml(rest);
-
-      targetLineEl.innerHTML = `<span class="typed">${typedHtml}</span>${currentHtml}<span class="rest">${restHtml}</span>`;
-
-      // Следующая строка (подсказка)
-      const next = srcLines[state.lineIndex + 1];
-      nextLineEl.textContent = next ? `Следующая: ${next}` : '';
-
-      // Очистим сообщение, если мы продолжаем строку
-      if (state.charIndex > 0) {
-        messageEl.textContent = '';
-      }
-      updateErrorLimitInfo();
-    }
-
-    // ===============================
-    // Ввод
-    // ===============================
-    function onKeyDown(e) {
-      const srcLines = getLinesForMode();
-      if (!srcLines.length) return;
-
-      // Управляющие клавиши
-      if (e.key === 'Tab' || e.key === 'Escape') {
-        e.preventDefault();
-        return;
-      }
-      if (e.key === 'Enter') {
-        // Игнорируем, печатаем только символы текущей строки
-        e.preventDefault();
-        return;
-      }
-      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.metaKey || e.ctrlKey || e.altKey) {
-        // Не вмешиваемся в навигацию/системные сочетания
-        return;
-      }
-
-      const lineRaw = srcLines[state.lineIndex] || '';
-      const line = normalizeLine(lineRaw);
-
-      if (e.key === 'Backspace') {
-        e.preventDefault();
-        if (state.charIndex > 0) {
-          state.charIndex -= 1;
-          // инпут укоротим
-          typingInput.value = line.slice(0, state.charIndex);
-          render();
-        }
-        return;
-      }
-
-      // Печатаемый символ
-      const ch = toTrainerChar(e.key);
-      if (!ch) {
-        // Неподходящий символ — глушим
-        e.preventDefault();
-        return;
-      }
-
-      const expected = line[state.charIndex] || '';
-      if (expected === '') {
-        // Строка уже набрана — пропустим ввод
-        e.preventDefault();
-        return;
-      }
-
-      e.preventDefault();
-
-      if (ch === expected) {
-        // Верно
-        state.charIndex += 1;
-        // Если строка завершена
-        if (state.charIndex >= line.length) {
-          onLineCompleted();
-        } else {
-          render();
-        }
-      } else {
-        // Ошибка
-        state.errorsInLine += 1;
-        showFlashError(ch);
-
-       if (state.errorsInLine > state.errorLimit) {
-  resetCurrentLineWithMessage('Слишком много ошибок. Повторим строку.');
-} else {
-          // Просто подсветили и продолжаем на том же символе
-          render();
-        }
-      }
-    }
-
-    function onLineCompleted() {
-      // Строка набрана, сбрасываем позицию
-      state.charIndex = 0;
-
-      const srcLines = getLinesForMode();
-
-      // Перейти к следующей строке
-      state.lineIndex += 1;
-      state.errorsInLine = 0;
-
-      if (state.mode === 'lesson') {
-        // Если закончили урок — перейти к следующему
-        const lessonLines = (curriculum[state.lessonIndex] || curriculum[0]).lines;
-        if (state.lineIndex >= lessonLines.length) {
-          state.lessonIndex += 1;
-          state.lineIndex = 0;
-          if (state.lessonIndex >= curriculum.length) {
-            state.lessonIndex = curriculum.length - 1;
-            state.lineIndex = (curriculum[state.lessonIndex].lines.length - 1);
-            flashMessage('Программа обучения завершена. Можно повторять или перейти к «Свой текст».', 'warn');
-          } else {
-            flashMessage(`Урок «${curriculum[state.lessonIndex].title}»`, 'warn');
-          }
-          lessonSelect.value = String(state.lessonIndex);
-        }
-      } else {
-        // Custom: просто двигаемся по строкам
-        if (state.lineIndex >= srcLines.length) {
-          state.lineIndex = srcLines.length - 1;
-          flashMessage('Все строки из «Свой текст» набраны.', 'warn');
-        }
-      }
-
-      saveProgress();
-      render();
-    }
-
-    function resetCurrentLineWithMessage(msg) {
-      state.charIndex = 0;
-      state.errorsInLine = 0;
-      typingInput.value = '';
-      flashMessage(msg, 'err');
-      render();
-    }
-
-    // ===============================
-    // Flash ошибки и сообщения
-    // ===============================
-    let flashTimer = null;
-    function showFlashError(ch) {
-      clearTimeout(flashTimer);
-      flashWrap.innerHTML = `<span class="flashErr">Ошибка: ${escapeHtml(ch)}</span>`;
-      flashTimer = setTimeout(() => {
-        flashWrap.innerHTML = '';
-      }, 1000);
-    }
-
-    function flashMessage(text, type = '') {
-      messageEl.textContent = text;
-      messageEl.classList.remove('warn', 'err');
-      if (type) messageEl.classList.add(type);
-      setTimeout(() => {
-        // Оставляю сообщение висеть, можно авто-погасить по желанию
-      }, 1200);
-    }
-
-    // ===============================
-    // Утилиты
-    // ===============================
-    function normalizeLine(s) {
-      // Разрешаем только базовые латинские lower и пробел/простую пунктуацию.
-      // Для «наметок» — приводим к lower case.
-      return (s || '').toLowerCase();
-    }
-
-    function toTrainerChar(key) {
-      // Преобразуем нажатую клавишу в символ тренажёра.
-      // Разрешаем: a-z, пробел, базовая пунктуация (.,;'/)
-      if (key === ' ') return ' ';
-      if (key.length === 1) {
-        const ch = key.toLowerCase();
-        if (/[a-z0-9.,;'/]/.test(ch)) return ch;
-      }
-      return '';
-    }
-
-    function escapeHtml(s) {
-      return (s || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;');
-    }
-
-    // ===============================
-    // Сохранение/загрузка прогресса
-    // ===============================
-    function saveProgress() {
-      try {
-        localStorage.setItem(LS_KEYS.mode, state.mode);
-        localStorage.setItem(LS_KEYS.lessonIndex, String(state.lessonIndex));
-        localStorage.setItem(LS_KEYS.lineIndex, String(state.lineIndex));
-        localStorage.setItem(LS_KEYS.errorLimit, String(state.errorLimit));
-        if (state.mode === 'custom' && state.customLines.length) {
-          saveCustomToLS(state.customLines);
-        }
-      } catch {}
-    }
-
-    function loadProgress() {
-      try {
-        const mode = localStorage.getItem(LS_KEYS.mode);
-        const lessonIndex = Number(localStorage.getItem(LS_KEYS.lessonIndex));
-        const lineIndex = Number(localStorage.getItem(LS_KEYS.lineIndex));
-        const errLimit = Number(localStorage.getItem(LS_KEYS.errorLimit));
-if (!Number.isNaN(errLimit)) {
-  state.errorLimit = clamp(errLimit, 0, 30);
+    state.customLines = loadCustomFromLS();
+  } catch {}
+}
+function saveCustomToLS(lines) {
+  try { localStorage.setItem(LS_KEYS.customLines, JSON.stringify(lines || [])); } catch {}
+}
+function loadCustomFromLS() {
+  try {
+    const raw = localStorage.getItem(LS_KEYS.customLines);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
 }
 
-        if (mode === 'custom' || mode === 'lesson') state.mode = mode;
-        if (!Number.isNaN(lessonIndex)) state.lessonIndex = clamp(lessonIndex, 0, curriculum.length - 1);
-        if (!Number.isNaN(lineIndex)) state.lineIndex = Math.max(0, lineIndex);
+// ===============================
+// Ассистент: видимость, клавиатура, подсветка
+// ===============================
+function updateAssistantVisibility() {
+  kbAssistant.style.display = '';
+  const kbBody = kbAssistant.querySelector('.kb');
+  if (kbBody) kbBody.style.display = state.showAssistant ? '' : 'none';
+  if (handsEl) handsEl.style.display = state.showAssistant ? '' : 'none';
+}
 
-        // Подгружаем custom, если есть
-        state.customLines = loadCustomFromLS();
-      } catch {}
-    }
+function buildKeyboard(layout = 'en') {
+  // Пересобираем раскладку
+  kbRows.innerHTML = '';
 
-    function saveCustomToLS(lines) {
-      try {
-        localStorage.setItem(LS_KEYS.customLines, JSON.stringify(lines || []));
-      } catch {}
-    }
+  const rowsEN = [
+    "`1234567890-=",
+    "qwertyuiop",
+    "asdfghjkl;'",
+    "zxcvbnm,./",
+  ];
+  const rowsRU = [
+    "ё1234567890-=",
+    "йцукенгшщзхъ",
+    "фывапролджэ",
+    "ячсмитьбю.", // точка есть, запятую не добавляю отдельной клавишей
+  ];
 
-    function loadCustomFromLS() {
-      try {
-        const raw = localStorage.getItem(LS_KEYS.customLines);
-        if (!raw) return [];
-        const parsed = JSON.parse(raw);
-        return Array.isArray(parsed) ? parsed : [];
-      } catch { return []; }
-    }
+  const rows = layout === 'ru' ? rowsRU : rowsEN;
 
-    function clamp(v, min, max) {
-      return Math.max(min, Math.min(max, v));
+  rows.forEach((rowStr) => {
+    const row = document.createElement('div');
+    row.className = 'kbRow';
+    for (const raw of rowStr) {
+      const ch = raw.toLowerCase();
+      const key = document.createElement('div');
+      key.className = 'kbKey';
+      key.dataset.key = ch;
+      // Текст на клавише: буквы — заглавные для наглядности, прочее — как есть
+      if (/[a-zа-яё]/i.test(raw)) {
+        key.textContent = raw.toUpperCase();
+      } else {
+        key.textContent = raw;
+      }
+      row.appendChild(key);
     }
-  </script>
+    kbRows.appendChild(row);
+  });
+
+  // Пробел
+  const spaceRow = document.createElement('div');
+  spaceRow.className = 'kbRow';
+  const spaceKey = document.createElement('div');
+  spaceKey.className = 'kbKey space';
+  spaceKey.dataset.key = ' ';
+  spaceKey.textContent = layout === 'ru' ? 'Пробел' : 'Space';
+  spaceRow.appendChild(spaceKey);
+  kbRows.appendChild(spaceRow);
+}
+
+function getKeyElForChar(ch) {
+  if (!kbEl || !ch) return null;
+  const allowedEN = /^[a-z0-9 \.\,;\'\/\-\=\`]$/;
+  const allowedRU = /^[а-яё0-9 \.\,;\'\/\-\=\`]$/i;
+  const allowed = state.mode === 'ru' ? allowedRU : allowedEN;
+  if (!allowed.test(ch)) return null;
+  const selector = ch === ' ' ? '[data-key=" "]' : `[data-key="${cssEscape(ch)}"]`;
+  return kbEl.querySelector(selector);
+}
+
+function highlightKey(ch) {
+  if (!kbEl) return null;
+  kbEl.querySelectorAll('.kbKey.highlight').forEach(el => el.classList.remove('highlight'));
+  if (!ch) return null;
+  const keyEl = getKeyElForChar(ch);
+  if (keyEl) keyEl.classList.add('highlight');
+  return keyEl;
+}
+
+function updateKeyboardHints() {
+  updateAssistantVisibility();
+  if (!state.showAssistant) return;
+
+  const expected = getExpectedChar();
+  const keyEl = highlightKey(expected);
+
+  const finger = getFingerForChar(expected);
+  updateHandsHighlightAtKey(finger, keyEl);
+}
+
+function getExpectedChar() {
+  const srcLines = getLinesForMode();
+  if (!srcLines.length) return '';
+  const curLineIndex = (state.mode === 'ru') ? state.ruLineIndex
+                       : (state.mode === 'lesson') ? state.lineIndex
+                       : state.lineIndex;
+  const line = normalizeLine(srcLines[curLineIndex] || '');
+  return line[state.charIndex] || '';
+}
+
+// Показ нужного пальца под конкретной клавишей
+function updateHandsHighlightAtKey(code, keyEl) {
+  Object.values(handEls).forEach(el => {
+    if (!el) return;
+    el.classList.remove('active');
+  });
+  if (!code || !keyEl || !spriteMeta.loaded) return;
+
+  const kbRect = kbEl.getBoundingClientRect();
+  const keyRect = keyEl.getBoundingClientRect();
+
+  const centerX = keyRect.left + keyRect.width / 2 - kbRect.left;
+  const topY = keyRect.bottom - kbRect.top + 8;
+  const scaledW = spriteMeta.frameW * HAND_SCALE;
+
+  function place(codeKey, xLeft, yTop) {
+    const el = handEls[codeKey];
+    if (!el) return;
+    const frameIdx = FINGER_TO_FRAME[codeKey];
+    setHandFrame(el, frameIdx);
+    el.style.left = `${Math.round(xLeft)}px`;
+    el.style.top = `${Math.round(yTop)}px`;
+    el.classList.add('active');
+  }
+
+  if (code === 'thumbs') {
+    const spaceEl = getKeyElForChar(' ') || keyEl;
+    const sRect = spaceEl.getBoundingClientRect();
+    const sCenter = sRect.left + sRect.width / 2 - kbRect.left;
+    const y = sRect.bottom - kbRect.top + 8;
+    const offset = Math.max(28, Math.min(60, sRect.width * 0.22));
+    place('l0', sCenter - offset - scaledW / 2, y);
+    place('r0', sCenter + offset - scaledW / 2, y);
+    return;
+  }
+
+  place(code, centerX - scaledW / 2, topY);
+}
+
+// Маппинг пальцев — EN/RU
+function getFingerForChar(ch) {
+  if (!ch) return '';
+  if (ch === ' ') return 'thumbs';
+
+  if (state.mode === 'ru') {
+    return getFingerForCharRU(ch);
+  }
+  return getFingerForCharEN(ch);
+}
+
+function getFingerForCharEN(ch) {
+  const L4 = new Set(['`', '1', 'q', 'a', 'z']);
+  const L3 = new Set(['2', 'w', 's', 'x']);
+  const L2 = new Set(['3', 'e', 'd', 'c']);
+  const L1 = new Set(['4', '5', 'r', 't', 'f', 'g', 'v', 'b']);
+
+  const R1 = new Set(['6', '7', 'y', 'u', 'h', 'j', 'n', 'm']);
+  const R2 = new Set(['8', 'i', 'k', ',']);
+  const R3 = new Set(['9', 'o', 'l', '.']);
+  const R4 = new Set(['0', '-', '=', 'p', ';', '\'', '/']);
+
+  const c = ch;
+  if (L4.has(c)) return 'l4';
+  if (L3.has(c)) return 'l3';
+  if (L2.has(c)) return 'l2';
+  if (L1.has(c)) return 'l1';
+  if (R1.has(c)) return 'r1';
+  if (R2.has(c)) return 'r2';
+  if (R3.has(c)) return 'r3';
+  if (R4.has(c)) return 'r4';
+  return '';
+}
+
+function getFingerForCharRU(ch) {
+  // Базовая раскладка ЙЦУКЕН
+  const L4 = new Set(['ё', '1', 'й', 'ф', 'я']);
+  const L3 = new Set(['2', 'ц', 'ы', 'ч']);
+  const L2 = new Set(['3', 'у', 'в', 'с']);
+  const L1 = new Set(['4', '5', 'к', 'е', 'а', 'п', 'м', 'и']);
+
+  const R1 = new Set(['6', '7', 'г', 'ш', 'р', 'о', 'т', 'ь', 'н', 'б']);
+  const R2 = new Set(['8', 'щ', 'л', 'д', 'ю']);
+  const R3 = new Set(['9', 'з', 'ж', 'э', '.']);
+  const R4 = new Set(['0', '-', '=', 'х', 'ъ']);
+
+  const c = ch;
+  if (L4.has(c)) return 'l4';
+  if (L3.has(c)) return 'l3';
+  if (L2.has(c)) return 'l2';
+  if (L1.has(c)) return 'l1';
+  if (R1.has(c)) return 'r1';
+  if (R2.has(c)) return 'r2';
+  if (R3.has(c)) return 'r3';
+  if (R4.has(c)) return 'r4';
+  return '';
+}
+
+// Безопасный селектор для data-key
+function cssEscape(ch) {
+  return ch.replace(/([\\`'"])/g, '\\$1');
+}
+</script>
 </body>
 </html>
