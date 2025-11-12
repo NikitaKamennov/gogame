@@ -55,7 +55,7 @@ func main() {
   http.HandleFunc("/pacman", serveHTML("static/pacman.html"))
   http.HandleFunc("/bomberman", serveHTML("static/bomberman.html"))
   http.HandleFunc("/elasto", serveHTML("static/elastomania.html"))
-   http.HandleFunc("/tren", serveHTML("static/trenya.html"))
+  http.HandleFunc("/tren", serveHTML("static/trenya.html"))
   
 
 
