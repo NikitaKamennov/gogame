@@ -7,11 +7,12 @@ import (
 	"os/exec"
 	"runtime"
 	"time"
+	"io/fs"
 )
 
 //go:generate go run github.com/tc-hib/go-winres@latest make --in=winres.json --out=.
 
-//go:embed static/*.html
+//go:embed static/**
 var content embed.FS
 
 // Открытие браузера по умолчанию
@@ -57,6 +58,12 @@ func main() {
   http.HandleFunc("/elasto", serveHTML("static/elastomania.html"))
   http.HandleFunc("/tren", serveHTML("static/trenya.html"))
   
+
+	staticFS, err := fs.Sub(content, "static")
+if err != nil {
+    panic(err)
+}
+http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 
 
 	// Запускаем сервер в фоне

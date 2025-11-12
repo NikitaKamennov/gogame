@@ -1,23 +1,23 @@
-export const curriculum = [
+const curriculum = [
   {
     id: 'home-1',
     title: 'Домашний ряд 1 (f/j, as/kl)',
     lines: [
-      'f j f j f j f j f j f j f j f j f j f j f j f j',
-      'ff jj ff jj ff jj ff jj ff jj ff jj',
-      'fj fj fj fj fj fj fj fj fj fj fj fj fj fj',
-      'f jf jf jf jf jf jf jf jf jf jf jf j',
-      'as as as as as as as as as as as as as as as',
-      'kl kl kl kl kl kl kl kl kl kl kl kl kl kl',
-      'as kl as kl as kl as kl as kl as kl as kl',
-      'a s a s a s a s a s a s a s a s a s a s',
-      'k l k l k l k l k l k l k l k l k l k l',
-      'f f f j j j f f f j j j f f f j j j',
-      'fj jf fj jf fj jf fj jf fj jf fj jf fj jf',
-      'ff f ff f ff f jj j jj j jj j',
-      'af aj af aj af aj af aj af aj',
-      'sf sj sf sj sf sj sf sj sf sj',
-      'ka kj ka kj ka kj ka kj ka kj',
+      'f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f j f jff jj ff jj ff jj ff jj ff jj ff jj',
+      'ff jj ff jj ff jj ff jj ff jj ff jjff jj ff jj ff jj ff jj ff jj ff jjff jj ff jj ff jj ff jj ff jj ff jj',
+      'fj fj fj fj fj fj fj fj fj fj fj fj fj fjfj fj fj fj fj kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl kl fj fjfj fj fj fj fj fj fj fj fj fj fj fj fj fjfj fj fj fj fj fj fj fj fj fj fj fj fj fj',
+      'f jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf jf j',
+      'as as as as as as as as as as as as as as asas as as as as as as as as as as as as as asas as as as as as as as as as as as as as as',
+      'kl kl kl kl kl kl kl kl kl kl kl kl kl klkl kl kl kl kl kl kl kl kl kl kl kl kl klkl kl kl kl kl kl kl kl kl kl kl kl kl klkl kl kl kl kl kl kl kl kl kl kl kl kl kl',
+      'as kl as kl as kl as kl as kl as kl as klkl kl kl kl kl kl kl kl kl kl kl kl kl klkl kl kl kl kl kl kl kl kl kl kl kl kl kl',
+      'a s a s a s a s a s a s a sfj jf fj jf fj jf fj jf fj jf fj jf fj jf a s a s a skl kl kl  j f j f j f j f j f j f j f j f j f j f j f j f jff jj ff jj ff jj ff j j f j f j f j f j f j f j f j f j f j f j f j f jff jj ff jj ff jj ff jj ff jj j ff jj kl kl kl kl kl kl kl kl kl kl kl',
+      'k l k l k l k l k l k l k l k l k l k lkl kl kl kl kl kl k j f j f j f j f j f j f j f j f j f j f j f j f jff jj ff jj ff jj ff jj ff jj  j f j f j f j f j f j f j f j f j f j f j f j f jff jj ff jj ff jj ff jj ff jj l kl kl kl kl kl kl kl',
+      'f f f j jfj jf fj jf fj jf fj jf fj jf fj jf fj jffj jf fj jf fj jf fj jf fj jf fj jf fj jffj jf fj jf fj jf fj jf fj jf fj jf fj jf j f f f j j j f f f j j j',
+      'fj jf fj jf fj jf fj jf fj jf fj jf fj jffj jf fj jf fj jf fj jf fj jf fj jf fj jffj jf fj jf fj jf fj jf fj jf fj jf fj jffj jf fj jf fj jf fj jf fj jf fj jf fj jffj jf fj jf fj jf fj jf fj jf fj jf fj jf',
+      'ff f ff f ff f jj j jj j jj jaf aj af aj af aj af aj af ajaf aj af aj af aj af aj af ajaf aj af aj af aj af aj af ajaf aj af aj af aj af aj af aj',
+      'af aj af aj af aj af aj af ajaf aj af aj af aj af aj af ajaf aj af aj af aj af aj af ajaf aj af aj af aj af aj af ajaf aj af aj af aj af aj af aj',
+      'sf sj sf sj sf sj sf sj sf sjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kj',
+      'ka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kjka kj ka kj ka kj ka kj ka kj',
       'la lj la lj la lj la lj la lj',
       'asf asj ask asf asj ask asf asj ask',
       'jkl jkl jkl jkl jkl jkl',
@@ -311,5 +311,74 @@ export const curriculum = [
       'home top bottom home top bottom',
       'left hand right hand left hand right hand'
     ]
-  }
+  },
+  ,
+{
+  id: 'words-advanced',
+  title: 'Связки слов (сложные)',
+  lines: [
+    'quick brown fox jumps over the lazy dog',
+    'sphinx of black quartz judge my vow',
+    'pack my box with five dozen liquor jugs',
+    'the five boxing wizards jump quickly',
+    'crazy fredrick bought many very exquisite opal jewels',
+    'do not stop when you are tired stop when you are done',
+    'practice precise presses progress proves proficiency',
+    'focus on form then add speed and sustain it',
+    'steady hands steady mind steady pace',
+    'small habits stack into solid skills',
+    'work with intent and remove wasted motion',
+    'minimize errors maximize learning over time',
+    'keep your wrists low and your shoulders relaxed',
+    'consistency beats intensity in the long run',
+    'refine your posture refine your timing refine your aim',
+    'short bursts then short breaks then repeat',
+    'flow grows when friction goes',
+    'type what you think and think what you type',
+    'accuracy first speed second confidence follows',
+    'do not look at keys trust your muscle memory',
+    'use clean strokes and clear rhythm',
+    'train transitions between tricky pairs like ui io op',
+    'move smoothly through qwe rty yui iop blocks',
+    'break long words into small chunks and rejoin them',
+    'you do not rise to the level of goals you fall to the level of systems',
+    'set a tiny goal then show up daily and keep it simple',
+    'when you feel tension slow down breathe and reset',
+    'do not rush a clean run beats a fast messy run',
+    'repeat lines until you get a flawless streak',
+    'enjoy the craft and the progress will come'
+  ]
+},
+{
+  id: 'paragraphs',
+  title: 'Абзацы',
+  lines: [
+    'this is a simple paragraph. keep a steady pace and aim for accuracy. errors reset the line.',
+    'start with calm breathing and relaxed hands. keep your eyes on the target line. do not rush.',
+    'build consistency day by day. practice makes progress. small steps add up.',
+    'focus on smooth motion and even timing. press lightly. let the rhythm guide you.',
+    'accuracy comes before speed. speed will grow when accuracy is stable. stay patient.',
+    'type full sentences without looking down. trust the layout. keep your posture straight.',
+    'make fewer errors by slowing down. then add speed in small steps. repeat and refine.',
+    'when you slip just reset the line and continue. do not judge. keep moving forward.',
+    'use short breaks to rest your hands. return with fresh focus. protect your form.',
+    'celebrate small wins. today you type a little better than yesterday. keep going.'
+  ]
+},
+{
+  id: 'paragraphs-advanced',
+  title: '<Большой текст 1',
+  lines: [
+    'this is a simple paragraph. keep a steady pace and aim for accuracy. errors reset the line.',
+    'start with calm breathing and relaxed hands. keep your eyes on the target line. do not rush.',
+    'build consistency day by day. practice makes progress. small steps add up.',
+    'focus on smooth motion and even timing. press lightly. let the rhythm guide you.',
+    'accuracy comes before speed. speed will grow when accuracy is stable. stay patient.',
+    'type full sentences without looking down. trust the layout. keep your posture straight.',
+    'make fewer errors by slowing down. then add speed in small steps. repeat and refine.',
+    'when you slip just reset the line and continue. do not judge. keep moving forward.',
+    'use short breaks to rest your hands. return with fresh focus. protect your form.',
+    'celebrate small wins. today you type a little better than yesterday. keep going.'
+  ]
+}
 ];
