@@ -1,0 +1,1316 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<title>Танчики</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<style>
+  html, body { margin:0; height:100%; background:#0a0e14; color:#e8ecff; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+  #game { display:block; width:100vw; height:100vh; touch-action:none; background: #0c1018; }
+  .overlay {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.45); z-index: 10; padding: 20px;
+  }
+  .overlay.open { display: flex; }
+  .panel {
+    background: rgba(18,22,35,0.95);
+    border: 1px solid #1e2a4f;
+    border-radius: 12px;
+    padding: 16px;
+    max-width: 90vw;
+    color: #dfe6ff;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+    text-align: center;
+  }
+  /* Панель кнопок по центру внизу (не мешает D-pad и FIRE) */
+.midbar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 16px;
+  z-index: 5;
+  display: none; /* показываем только в игре */
+  gap: 10px;
+}
+.midbar .btn-ui {
+  display: inline-grid;
+  place-items: center;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #2a3a6c;
+  background: linear-gradient(135deg, #7c9fff, #00d4ff);
+  color: #001221;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+  .panel h3 { margin: 0 0 8px; }
+  .panel p { margin: 6px 0; color: #9fb3ff; }
+  .panel .btn {
+    display: inline-grid; place-items: center; padding: 10px 14px; margin-top: 10px;
+    border-radius: 10px; border: 1px solid #2a3a6c;
+    background: linear-gradient(135deg, #7c9fff, #00d4ff); color: #001221; font-weight: 700; cursor: pointer;
+  }
+  /* Лобби */
+  .stage-list { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; text-align: left; }
+  .stage-item { display: flex; align-items: center; gap: 10px; padding: 10px; border: 1px solid #2a3a6c; border-radius: 10px; background: rgba(20,26,41,0.6); }
+  .stage-item.locked { opacity: 0.5; }
+  .stage-item input[type=radio] { transform: scale(1.2); }
+  .stage-item .name { font-weight: 600; color: #dfe6ff; }
+  .stage-item .status { margin-left: auto; font-size: 12px; color: #9fb3ff; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="midbar" class="midbar">
+   <button id="btnMusic" class="btn-ui">М: Вкл</button>
+   <button id="btnExit" class="btn-ui">Выйти</button>
+ </div>
+
+<!-- Лобби -->
+<div id="help" class="overlay open">
+  <div class="panel">
+    <h3>Выбор уровня</h3>
+    <p>Управление: стрелки/WSAD — движение, Space — огонь. На телефоне — кнопки на экране.</p>
+    <div id="stageList" class="stage-list"></div>
+    <button id="btnStart" class="btn">Старт</button>
+  </div>
+</div>
+
+<!-- Модалка результата -->
+<div id="modal" class="overlay">
+  <div class="panel">
+    <h3 id="modalTitle">Сообщение</h3>
+    <p id="modalText"></p>
+    <button id="btnOk" class="btn">ОК</button>
+  </div>
+</div>
+
+<script>
+// ---------- Константы ----------
+const GRID = 13;                // 13×13 тайлов
+const TILE_EMPTY = 0;
+const TILE_BRICK = 1;
+const TILE_STEEL = 2;
+const TILE_BASE  = 3;           // база игрока (нижняя)
+const TILE_BASE_ENEMY = 4;      // база врага (верхняя)
+const DIR_UP=0, DIR_RIGHT=1, DIR_DOWN=2, DIR_LEFT=3;
+const DIRS = [
+  {x:0, y:-1}, {x:1, y:0}, {x:0, y:1}, {x:-1, y:0}
+];
+const FIXED_DT = 1/60;
+const PLAYER_SPEED = 3.2;   // тайл/с
+const ENEMY_SPEED  = 1.6;   // тайл/с
+const BULLET_SPEED = 8.0;   // тайл/с
+const TANK_SIZE = 0.9;      // доля тайла (размер корпуса)
+const RELOAD_TIME = 0.55;   // сек на перезарядку
+const ENEMY_SHOOT_CD = [1.2, 2.2]; // разброс между выстрелами
+const AI_TURN_PROB = 0.015; // шанс случайного поворота/тик
+const COLORS = {
+  bg: '#0c1018',
+  grid: 'rgba(255,255,255,0.05)',
+  brick: '#b5523b',
+  steel: '#8f9bb3',
+  tankPlayer: '#76e3ff',
+  tankEnemy: '#ffd26f',
+  bullet: '#fff',
+  base: '#eaeaea',
+  baseEnemy: '#ffd3d3',
+  baseEye: '#222',
+  text: '#dfe6ff',
+  control: 'rgba(124,159,255,0.2)',
+  controlLine: 'rgba(124,159,255,0.9)'
+};
+
+// ---------- Canvas / адаптив ----------
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let view = {
+  w: window.innerWidth,
+  h: window.innerHeight,
+  tile: 24,      // px/тайл (пересчитывается)
+  boardSize: 0,  // GRID * tile
+  boardX: 0,     // смещение для центрирования
+  boardY: 0,
+  portrait: false,
+  dpad: null,    // геометрия зоны D‑pad
+  fire: null     // геометрия кнопки Fire
+};
+
+// ---------- Настройки музыки (localStorage) ----------
+const LS_MUSIC_KEY = 'btanks_musicMuted';
+let musicMuted = (localStorage.getItem(LS_MUSIC_KEY) === '1');
+
+function updateMusicBtn(){
+  const el = document.getElementById('btnMusic');
+  if (el) el.textContent = `М: ${musicMuted ? 'Выкл' : 'Вкл'}`;
+}
+
+function updateMidbarVis(){
+  const mb = document.getElementById('midbar');
+  if (mb) mb.style.display = State.running ? 'flex' : 'none';
+}
+
+function resize(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  view.w = canvas.width;
+  view.h = canvas.height;
+  view.portrait = view.h >= view.w;
+  // Резерв под контролы (внутри канваса)
+  const ctrlH = view.portrait ? Math.floor(view.h * 0.45) : Math.floor(view.h * 0.33);
+  // Размер доски (квадрат) — уместить с учётом контролов
+  const usableH = Math.max(1, view.h - ctrlH);
+  const boardPx = Math.min(view.w, usableH);
+  const g = State.GRID || GRID;                 // ДОБАВИТЬ
+  view.tile = Math.floor(boardPx / g);          // ЗАМЕНИТЬ GRID -> g
+  view.boardSize = view.tile * g;  
+  view.boardX = Math.floor((view.w - view.boardSize) / 2);
+  view.boardY = Math.floor((usableH - view.boardSize) / 2);
+  // Геометрия D‑pad и Fire (px)
+  const margin = Math.floor(view.tile * 0.5);
+  const padSize = Math.floor(Math.min(view.w, view.h) * 0.42);
+  const padR = Math.floor(padSize / 2);
+  const dpadY = view.h - padSize - margin;
+  view.dpad = {
+    x: margin, y: dpadY, w: padSize, h: padSize,
+    cx: margin + padR, cy: dpadY + padR, r: padR
+  };
+  const fireSize = Math.floor(padSize * 0.8);
+  const fireR = Math.floor(fireSize / 2);
+  const fireX = view.w - fireSize - margin;
+  const fireY = view.h - fireSize - margin;
+  view.fire = { x: fireX, y: fireY, w: fireSize, h: fireSize, cx: fireX + fireR, cy: fireY + fireR, r: fireR };
+}
+window.addEventListener('resize', ()=> { resize(); draw(); });
+
+// ---------- Стадии (уровни) ----------
+function buildStage1(){
+  const map = Array.from({length: GRID}, ()=> Array(GRID).fill(TILE_EMPTY));
+  // Стальной периметр
+  for (let i=0;i<GRID;i++){
+    map[0][i] = TILE_STEEL;
+    map[GRID-1][i] = TILE_STEEL;
+    map[i][0] = TILE_STEEL;
+    map[i][GRID-1] = TILE_STEEL;
+  }
+  // Несколько стен кирпича и стали
+  for (let x=2; x<GRID-2; x+=2) {
+    if (x===6) continue; // проход по центру
+    map[4][x] = TILE_BRICK;
+    map[5][x] = TILE_BRICK;
+    map[7][x] = TILE_STEEL;
+  }
+  // Простой блок лабиринта
+  for (let y=2; y<=9; y+=2) {
+    map[y][3] = TILE_BRICK;
+    map[y][9] = TILE_BRICK;
+  }
+  // Штаб игрока
+  const bx = 6, by = 12;
+  map[by][bx] = TILE_BASE;
+  const aroundPlayer = [
+    [bx-1, by], [bx+1, by],
+    [bx-1, by-1], [bx, by-1], [bx+1, by-1],
+    [bx-1, by-2], [bx, by-2], [bx+1, by-2]
+  ];
+  for (const [x,y] of aroundPlayer) {
+    if (y>0 && y<GRID-1 && x>0 && x<GRID-1) map[y][x] = TILE_BRICK;
+  }
+  // Штаб врага
+  const exb = 6, eyb = 1;
+  map[eyb][exb] = TILE_BASE_ENEMY;
+  // Центральную клетку (exb, eyb+1) оставляем пустой для спавна
+  const aroundEnemy = [
+    [exb-1, eyb], [exb+1, eyb],
+    [exb-1, eyb+1],            /* [exb, eyb+1] пропускаем */ [exb+1, eyb+1],
+    [exb-1, eyb+2], [exb, eyb+2], [exb+1, eyb+2]
+  ];
+  for (const [x,y] of aroundEnemy) {
+    if (y>0 && y<GRID-1 && x>0 && x<GRID-1) map[y][x] = TILE_BRICK;
+  }
+  // Стартовые позиции
+  const playerStart = { x: 2, y: GRID-3, dir: DIR_UP };
+  const enemyStart  = { x: 6, y: 2, dir: DIR_DOWN };
+  return { map, playerStart, enemyStart, base: {x:6, y:12}, baseEnemy: {x:6, y:1} };
+}
+
+function buildStage2(){
+  const map = Array.from({length: GRID}, ()=> Array(GRID).fill(TILE_EMPTY));
+  // Стальной периметр
+  for (let i=0;i<GRID;i++){
+    map[0][i] = TILE_STEEL;
+    map[GRID-1][i] = TILE_STEEL;
+    map[i][0] = TILE_STEEL;
+    map[i][GRID-1] = TILE_STEEL;
+  }
+  // «Шахматные» кирпичи с просветами
+  for (let y=2; y<GRID-2; y++){
+    for (let x=2; x<GRID-2; x++){
+      if ((x+y) % 2 === 0) map[y][x] = TILE_BRICK;
+    }
+  }
+  // Вертикальные стальные колонны в центре с проходом
+  for (let y=2; y<GRID-2; y++){
+    if (y === Math.floor(GRID/2)) continue; // коридор по центру
+    map[y][6] = TILE_STEEL;
+  }
+  // Очищаем коридоры к штабам
+  for (let x=1; x<GRID-1; x++) map[1][x] = map[2][x] === TILE_STEEL ? TILE_STEEL : TILE_EMPTY;
+  for (let x=1; x<GRID-1; x++) map[GRID-2][x] = map[GRID-3][x] === TILE_STEEL ? TILE_STEEL : TILE_EMPTY;
+
+  // Штаб игрока (низ, центр)
+  const bx = 6, by = 12;
+  map[by][bx] = TILE_BASE;
+  // Усиленное обрамление кирпичом (оставим «дверь» по центру)
+  const aroundPlayer = [
+    [bx-1, by], [bx+1, by],
+    [bx-2, by-1], [bx-1, by-1], /* [bx, by-1] — проход */ [bx+1, by-1], [bx+2, by-1],
+    [bx-2, by-2], [bx-1, by-2], [bx, by-2], [bx+1, by-2], [bx+2, by-2]
+  ];
+  for (const [x,y] of aroundPlayer) {
+    if (y>0 && y<GRID-1 && x>0 && x<GRID-1) map[y][x] = TILE_BRICK;
+  }
+
+  // Штаб врага (верх, центр)
+  const exb = 6, eyb = 1;
+  map[eyb][exb] = TILE_BASE_ENEMY;
+  const aroundEnemy = [
+    [exb-1, eyb], [exb+1, eyb],
+    [exb-2, eyb+1], [exb-1, eyb+1], /* [exb, eyb+1] — проход */ [exb+1, eyb+1], [exb+2, eyb+1],
+    [exb-2, eyb+2], [exb-1, eyb+2], [exb, eyb+2], [exb+1, eyb+2], [exb+2, eyb+2]
+  ];
+  for (const [x,y] of aroundEnemy) {
+    if (y>0 && y<GRID-1 && x>0 && x<GRID-1) map[y][x] = TILE_BRICK;
+  }
+
+  // Стартовые позиции: игрок слева внизу, враг справа вверху
+  const playerStart = { x: 1, y: GRID-3, dir: DIR_UP };
+  const enemyStart  = { x: GRID-2, y: 2, dir: DIR_LEFT };
+  return { map, playerStart, enemyStart, base: {x:6, y:12}, baseEnemy: {x:6, y:1} };
+}
+
+function buildStage3(){
+  const map = Array.from({length: GRID}, ()=> Array(GRID).fill(TILE_EMPTY));
+  // Периметр сталью
+  for (let i=0;i<GRID;i++){
+    map[0][i] = TILE_STEEL;
+    map[GRID-1][i] = TILE_STEEL;
+    map[i][0] = TILE_STEEL;
+    map[i][GRID-1] = TILE_STEEL;
+  }
+  // Симметричные коридоры и блоки
+  for (let x=2; x<GRID-2; x++){
+    if (x === 6) continue;
+    map[3][x] = TILE_BRICK;
+    map[9][x] = TILE_BRICK;
+  }
+  for (let y=2; y<GRID-2; y++){
+    if (y === 6) continue;
+    map[y][4] = TILE_STEEL;
+    map[y][8] = TILE_STEEL;
+  }
+  // База игрока (низ, центр) с обрамлением
+  const bx = 6, by = 12;
+  map[by][bx] = TILE_BASE;
+  const aroundPlayer = [
+    [bx-1, by], [bx+1, by],
+    [bx-2, by-1], [bx-1, by-1], /* [bx, by-1] — проход */ [bx+1, by-1], [bx+2, by-1],
+    [bx-2, by-2], [bx-1, by-2], [bx, by-2], [bx+1, by-2], [bx+2, by-2]
+  ];
+  for (const [x,y] of aroundPlayer) {
+    if (y>0 && y<GRID-1 && x>0 && x<GRID-1) map[y][x] = TILE_BRICK;
+  }
+  // База врага (верх, центр) с проходом для спавна
+  const exb = 6, eyb = 1;
+  map[eyb][exb] = TILE_BASE_ENEMY;
+  const aroundEnemy = [
+    [exb-1, eyb], [exb+1, eyb],
+    [exb-2, eyb+1], [exb-1, eyb+1], /* [exb, eyb+1] — проход */ [exb+1, eyb+1], [exb+2, eyb+1],
+    [exb-2, eyb+2], [exb-1, eyb+2], [exb, eyb+2], [exb+1, eyb+2], [exb+2, eyb+2]
+  ];
+  for (const [x,y] of aroundEnemy) {
+    if (y>0 && y<GRID-1 && x>0 && x<GRID-1) map[y][x] = TILE_BRICK;
+  }
+  // Стартовые позиции
+  const playerStart = { x: 2, y: GRID-3, dir: DIR_UP };
+  const enemiesStart = [
+    { x: 3, y: 2, dir: DIR_DOWN },
+    { x: 9, y: 2, dir: DIR_DOWN }
+  ];
+  return { map, playerStart, enemiesStart, base: {x:6, y:12}, baseEnemy: {x:6, y:1} };
+}
+
+
+// ===== Генераторы уровней =====
+function buildStageLight(){
+  return generateRandomStage(13, 1);
+}
+function buildStageHard(){
+  const enemies = Math.floor(2 + Math.random()*3); // 2..4
+  return generateRandomStage(26, enemies);
+}
+function generateRandomStage(G, enemyCount){
+  // Карта и константы размещения
+  const map = Array.from({length: G}, ()=> Array(G).fill(TILE_EMPTY));
+
+  // Периметр сталью
+  for (let i=0;i<G;i++){
+    map[0][i] = TILE_STEEL;
+    map[G-1][i] = TILE_STEEL;
+    map[i][0] = TILE_STEEL;
+    map[i][G-1] = TILE_STEEL;
+  }
+
+  // Базы
+  const bx = Math.floor(G/2), by = G-2;
+  const exb = Math.floor(G/2), eyb = 1;
+  map[by][bx] = TILE_BASE;
+  map[eyb][exb] = TILE_BASE_ENEMY;
+
+  // Оформление баз кирпичом, оставляя «дверь» по центру
+  const safeCells = new Set();
+  function key(x,y){ return `${x},${y}`; }
+
+  // Низ (игрок)
+  const aroundPlayer = [
+    [bx-1, by], [bx+1, by],
+    [bx-2, by-1], [bx-1, by-1], /* [bx, by-1] — проход */ [bx+1, by-1], [bx+2, by-1],
+    [bx-2, by-2], [bx-1, by-2], [bx, by-2], [bx+1, by-2], [bx+2, by-2]
+  ];
+  for (const [x,y] of aroundPlayer){
+    if (y>0 && y<G-1 && x>0 && x<G-1){ map[y][x] = TILE_BRICK; safeCells.add(key(x,y)); }
+  }
+  // Верх (враг)
+  const aroundEnemy = [
+    [exb-1, eyb], [exb+1, eyb],
+    [exb-2, eyb+1], [exb-1, eyb+1], /* [exb, eyb+1] — проход */ [exb+1, eyb+1], [exb+2, eyb+1],
+    [exb-2, eyb+2], [exb-1, eyb+2], [exb, eyb+2], [exb+1, eyb+2], [exb+2, eyb+2]
+  ];
+  for (const [x,y] of aroundEnemy){
+    if (y>0 && y<G-1 && x>0 && x<G-1){ map[y][x] = TILE_BRICK; safeCells.add(key(x,y)); }
+  }
+
+  // Старт игрока и врагов (не на штабах)
+  const playerStart = { x: 2, y: G-3, dir: DIR_UP };
+  const enemyRowsY = 2; // враги на y=2
+  const candidates = [];
+  for (let x=1; x<G-1; x++){
+    if (x === exb) continue; // не поверх штаба
+    candidates.push(x);
+  }
+  // Немного перемешаем кандидатов
+  for (let i=candidates.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
+  const enemiesStart = [];
+  for (let i=0;i<enemyCount && i<candidates.length;i++){
+    enemiesStart.push({ x: candidates[i], y: enemyRowsY, dir: DIR_DOWN });
+  }
+
+  // Пометить безопасные клетки (спавны + вокруг)
+  function markSafe(x,y){
+    for (let dy=-1; dy<=1; dy++){
+      for (let dx=-1; dx<=1; dx++){
+        const xx = x+dx, yy = y+dy;
+        if (xx>0 && xx<G-1 && yy>0 && yy<G-1) safeCells.add(key(xx,yy));
+      }
+    }
+  }
+  markSafe(playerStart.x, playerStart.y);
+  for (const e of enemiesStart) markSafe(e.x, e.y);
+  markSafe(exb, eyb+1); // проход у верхней базы
+  markSafe(bx,  by-1); // проход у нижней базы
+
+  // Параметры заполнения
+  const steelProb = (G >= 26) ? 0.09 : 0.07;
+  const brickProb = (G >= 26) ? 0.26 : 0.22;
+
+  // Функция генерации заполнения и валидации пути
+  function tryFillAndValidate(){
+    // Очистить внутренности кроме уже проставленных кирпичей/баз
+    for (let y=1;y<G-1;y++){
+      for (let x=1;x<G-1;x++){
+        if (map[y][x] === TILE_BRICK || map[y][x] === TILE_BASE || map[y][x] === TILE_BASE_ENEMY) continue;
+        map[y][x] = TILE_EMPTY;
+      }
+    }
+    // Раскидать сталь
+    for (let y=1;y<G-1;y++){
+      for (let x=1;x<G-1;x++){
+        const k = key(x,y);
+        if (safeCells.has(k)) continue;
+        if (map[y][x] !== TILE_EMPTY) continue;
+        if (Math.random() < steelProb) map[y][x] = TILE_STEEL;
+      }
+    }
+    // Раскидать кирпич
+    for (let y=1;y<G-1;y++){
+      for (let x=1;x<G-1;x++){
+        const k = key(x,y);
+        if (safeCells.has(k)) continue;
+        if (map[y][x] !== TILE_EMPTY) continue;
+        if (Math.random() < brickProb) map[y][x] = TILE_BRICK;
+      }
+    }
+    // Проверка: существует путь от игрока до враж. штаба, если кирпич считать проходимым (сталь — нет)
+    return hasPathThroughBricks(map, G, {x:playerStart.x, y:playerStart.y}, {x:exb, y:eyb});
+  }
+
+  let tries = 0;
+  while (!tryFillAndValidate() && tries < 50) tries++;
+
+  return {
+    map,
+    playerStart,
+    enemiesStart,
+    base: {x: bx, y: by},
+    baseEnemy: {x: exb, y: eyb}
+  };
+}
+
+function hasPathThroughBricks(map, G, start, goal){
+  const q = [start];
+  const seen = new Set([`${start.x},${start.y}`]);
+  const dirs = DIRS;
+  while (q.length){
+    const p = q.shift();
+    if (p.x === goal.x && p.y === goal.y) return true;
+    for (const d of dirs){
+      const nx = p.x + d.x, ny = p.y + d.y;
+      if (nx<0 || ny<0 || nx>=G || ny>=G) continue;
+      const t = map[ny][nx];
+      // Можно идти через пустоту, кирпич и базы; нельзя через сталь
+      if (t === TILE_STEEL) continue;
+      const k = `${nx},${ny}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      q.push({x:nx, y:ny});
+    }
+  }
+  return false;
+}
+
+// Реестр стадий
+const STAGES = [
+  { id: 1, name: 'Классика', build: buildStage1 },
+  { id: 2, name: 'Коридоры', build: buildStage2 },
+  { id: 3, name: 'Два противника', build: buildStage3 },
+  { id: 4, name: 'Сгенерить уровень Лайт', build: buildStageLight },
+  { id: 5, name: 'Сгенерить уровень Хард', build: buildStageHard }
+];
+
+// ---------- Прогресс (localStorage) ----------
+const LS_KEY = 'btanks_maxUnlocked';
+function getMaxUnlocked(){
+  const n = parseInt(localStorage.getItem(LS_KEY) || '1', 10);
+  return Number.isFinite(n) ? Math.max(1, Math.min(n, STAGES.length)) : 1;
+}
+function setMaxUnlocked(n){
+  const clamped = Math.max(1, Math.min(n, STAGES.length));
+  localStorage.setItem(LS_KEY, String(clamped));
+}
+function unlockNext(currentIndex){
+  const maxUnlocked = getMaxUnlocked();
+  const next = currentIndex + 2; // индексы 0‑based → id = index+1; next id = index+2
+  if (next > maxUnlocked) setMaxUnlocked(next);
+}
+
+// Выбор по умолчанию — максимальный открытый
+let selectedStageIndex = Math.max(0, getMaxUnlocked() - 1);
+let currentStageIndex = selectedStageIndex;
+let level = STAGES[currentStageIndex].build();
+
+// ---------- Игровое состояние ----------
+const State = {
+  map: level.map.map(row => row.slice()),
+  baseAlive: true,
+  baseEnemyAlive: true,
+  player: null,
+  enemies: [],
+  bullets: [],
+  running: false,
+  lastTs: 0,
+  accum: 0,
+  message: '',
+  time: 0,
+  GRID: level.map.length
+};
+
+function resetGame(){
+  // Пересобираем уровень перед стартом
+  level = STAGES[currentStageIndex].build();
+  State.map = level.map.map(row => row.slice());
+  State.GRID = level.map.length; // ДОБАВИТЬ ЭТУ СТРОКУ
+  State.baseAlive = true;
+  State.baseEnemyAlive = true;
+  State.bullets = [];
+  State.player = makeTank(level.playerStart.x, level.playerStart.y, level.playerStart.dir, true);
+
+  // Массив врагов (fallback из одного enemyStart для стейджей 1–2)
+  const enemyStarts = level.enemiesStart ? level.enemiesStart : (level.enemyStart ? [level.enemyStart] : []);
+  State.enemies = enemyStarts.map(s => makeTank(s.x, s.y, s.dir, false));
+
+  State.running = true;
+  State.lastTs = 0;
+  State.accum = 0;
+  State.time = 0;
+  closeModal();
+  updateMidbarVis();
+}
+
+function makeTank(tx, ty, dir, isPlayer){
+  return {
+    x: tx + 0.5, y: ty + 0.5, dir,
+    size: TANK_SIZE, speed: isPlayer ? PLAYER_SPEED : ENEMY_SPEED,
+    reload: 0, alive: true, isPlayer,
+    nextTurnAt: 0,
+    aiShootAt: 0
+  };
+}
+
+// ---------- Утилиты карты / коллизий ----------
+function tileAt(tx, ty){
+  if (tx<0 || ty<0 || tx>=State.GRID || ty>=State.GRID) return TILE_STEEL; // ЗАМЕНИТЬ
+  return State.map[ty][tx];
+}
+function setTile(tx, ty, v){
+  if (tx<0 || ty<0 || tx>=State.GRID || ty>=State.GRID) return; // ЗАМЕНИТЬ
+  State.map[ty][tx] = v;
+}
+function aabbSolidCollides(cx, cy, half){
+  const minx = cx - half, maxx = cx + half;
+  const miny = cy - half, maxy = cy + half;
+  const test = [
+    {x:minx, y:miny}, {x:maxx, y:miny},
+    {x:minx, y:maxy}, {x:maxx, y:maxy}
+  ];
+  for (const p of test){
+    const tx = Math.floor(p.x), ty = Math.floor(p.y);
+    const t = tileAt(tx, ty);
+    if (t === TILE_BRICK || t === TILE_STEEL || t === TILE_BASE || t === TILE_BASE_ENEMY) return true;
+  }
+  return false;
+}
+
+// ---------- Управление ----------
+const Input = { up:false, down:false, left:false, right:false, fire:false };
+document.addEventListener('keydown', (e)=>{
+  if (!State.running) return;
+  if (e.code==='ArrowUp' || e.code==='KeyW') Input.up=true;
+  if (e.code==='ArrowDown' || e.code==='KeyS') Input.down=true;
+  if (e.code==='ArrowLeft' || e.code==='KeyA') Input.left=true;
+  if (e.code==='ArrowRight' || e.code==='KeyD') Input.right=true;
+  if (e.code==='Space') Input.fire=true;
+  ensureAudio();
+});
+document.addEventListener('keyup', (e)=>{
+  if (e.code==='ArrowUp' || e.code==='KeyW') Input.up=false;
+  if (e.code==='ArrowDown' || e.code==='KeyS') Input.down=false;
+  if (e.code==='ArrowLeft' || e.code==='KeyA') Input.left=false;
+  if (e.code==='ArrowRight' || e.code==='KeyD') Input.right=false;
+  if (e.code==='Space') Input.fire=false;
+});
+
+// Сенсор на канвасе
+const touches = new Map();
+function handleControls(){
+  Input.up = Input.down = Input.left = Input.right = false;
+  Input.fire = false;
+  for (const t of touches.values()){
+    // D‑pad
+    if (t.x >= view.dpad.x && t.x <= view.dpad.x+view.dpad.w &&
+        t.y >= view.dpad.y && t.y <= view.dpad.y+view.dpad.h){
+      const dx = t.x - view.dpad.cx;
+      const dy = t.y - view.dpad.cy;
+      const ax = Math.abs(dx), ay = Math.abs(dy);
+      const dead = view.dpad.r * 0.15;
+      if (ax > ay){
+        if (ax > dead){ Input.left = dx < 0; Input.right = dx > 0; }
+      } else {
+        if (ay > dead){ Input.up = dy < 0; Input.down = dy > 0; }
+      }
+    }
+    // Fire
+    const dfx = t.x - view.fire.cx, dfy = t.y - view.fire.cy;
+    const dist2 = dfx*dfx + dfy*dfy;
+    if (dist2 <= view.fire.r*view.fire.r) Input.fire = true;
+  }
+}
+canvas.addEventListener('touchstart', (e)=> {
+  ensureAudio();
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  for (let i=0;i<e.changedTouches.length;i++){
+    const t = e.changedTouches[i];
+    const pos = { x: t.clientX - rect.left, y: t.clientY - rect.top };
+    touches.set(t.identifier, pos);
+  }
+  handleControls();
+}, {passive:false});
+canvas.addEventListener('touchmove', (e)=> {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  for (let i=0;i<e.changedTouches.length;i++){
+    const t = e.changedTouches[i];
+    if (touches.has(t.identifier)){
+      touches.set(t.identifier, { x: t.clientX - rect.left, y: t.clientY - rect.top });
+    }
+  }
+  handleControls();
+}, {passive:false});
+canvas.addEventListener('touchend', (e)=> {
+  e.preventDefault();
+  for (let i=0;i<e.changedTouches.length;i++){
+    const t = e.changedTouches[i];
+    touches.delete(t.identifier);
+  }
+  handleControls();
+});
+canvas.addEventListener('touchcancel', (e)=> {
+  for (let i=0;i<e.changedTouches.length;i++){
+    const t = e.changedTouches[i];
+    touches.delete(t.identifier);
+  }
+  handleControls();
+});
+
+// ---------- Логика танков/пуль ----------
+function stepTank(t, dt){
+  if (!t.alive) return;
+  let moveDir = t.dir;
+  let moving = false;
+  let wantShoot = false;
+
+  if (t.isPlayer){
+    if (Input.up)    { moveDir = DIR_UP;    moving = true; }
+    else if (Input.down)  { moveDir = DIR_DOWN;  moving = true; }
+    else if (Input.left)  { moveDir = DIR_LEFT;  moving = true; }
+    else if (Input.right) { moveDir = DIR_RIGHT; moving = true; }
+    // Важно: направление ставим до выстрела — дуло всегда совпадает с t.dir
+    t.dir = moveDir;
+    wantShoot = Input.fire;
+  } else {
+    if (State.time >= t.aiShootAt) {
+      const px = Math.floor(State.player.x), py = Math.floor(State.player.y);
+      const ex = Math.floor(t.x), ey = Math.floor(t.y);
+      if (px === ex) moveDir = py < ey ? DIR_UP : DIR_DOWN;
+      if (py === ey) moveDir = px < ex ? DIR_LEFT : DIR_RIGHT;
+      wantShoot = true;
+      t.aiShootAt = State.time + rand(ENEMY_SHOOT_CD[0], ENEMY_SHOOT_CD[1]);
+    }
+    moving = true;
+    if (Math.random() < AI_TURN_PROB) moveDir = Math.floor(Math.random() * 4);
+    t.dir = moveDir;
+  }
+
+  // Стрельба в текущем направлении t.dir
+  if (wantShoot) tryShoot(t);
+
+  if (moving){
+    const v = DIRS[t.dir];
+    const nx = t.x + v.x * t.speed * dt;
+    const ny = t.y + v.y * t.speed * dt;
+    const half = t.size * 0.5;
+    // X
+    if (!aabbSolidCollides(nx, t.y, half)){
+      t.x = nx;
+    } else if (!t.isPlayer) {
+      t.dir = (t.dir + 1 + Math.floor(Math.random()*3)) % 4;
+    }
+    // Y
+    if (!aabbSolidCollides(t.x, ny, half)){
+      t.y = ny;
+    } else if (!t.isPlayer) {
+      t.dir = (t.dir + 2) % 4;
+    }
+  }
+  t.reload = Math.max(0, t.reload - dt);
+}
+
+function tryShoot(t){
+  if (t.reload > 0 || !t.alive) return;
+  const activeFromTank = State.bullets.some(b=> b.owner === t);
+  if (activeFromTank) return;
+  const v = DIRS[t.dir];
+  const muzzle = 0.6;
+  const bx = t.x + v.x * muzzle;
+  const by = t.y + v.y * muzzle;
+  State.bullets.push({
+    x: bx, y: by, dir: t.dir, speed: BULLET_SPEED, owner: t, alive: true
+  });
+  t.reload = RELOAD_TIME;
+  sfxShoot();
+}
+
+function stepBullets(dt){
+  for (const b of State.bullets){
+    if (!b.alive) continue;
+    const v = DIRS[b.dir];
+    const nx = b.x + v.x * b.speed * dt;
+    const ny = b.y + v.y * b.speed * dt;
+    const tx = Math.floor(nx), ty = Math.floor(ny);
+    const t = tileAt(tx, ty);
+
+    if (t === TILE_STEEL){
+      b.alive = false; sfxHit(); continue;
+    }
+    if (t === TILE_BRICK){
+      setTile(tx, ty, TILE_EMPTY);
+      b.alive = false; sfxHit(); continue;
+    }
+    // Запрет дружественного урона по базам
+    if (t === TILE_BASE){
+      if (b.owner && b.owner.isPlayer){
+        b.alive = false; sfxHit(); continue;
+      } else {
+        State.baseAlive = false;
+        b.alive = false;
+        sfxExplosion();
+        gameOver(false, 'Штаб уничтожен!');
+        continue;
+      }
+    }
+    if (t === TILE_BASE_ENEMY){
+      if (b.owner && !b.owner.isPlayer){
+        b.alive = false; sfxHit(); continue;
+      } else {
+        State.baseEnemyAlive = false;
+        b.alive = false;
+        sfxExplosion();
+        gameOver(true, 'Штаб врага уничтожен! Победа!');
+        continue;
+      }
+    }
+
+    // Коллизии с танками
+    if (b.owner.isPlayer){
+      // По всем врагам
+      for (const e of State.enemies){
+        if (!e.alive) continue;
+        const half = e.size * 0.5;
+        if (Math.abs(nx - e.x) <= half && Math.abs(ny - e.y) <= half){
+          e.alive = false;
+          b.alive = false;
+          sfxExplosion();
+          // Победа, если все враги уничтожены
+          const anyAlive = State.enemies.some(en => en.alive);
+          if (!anyAlive){
+            gameOver(true, 'Все враги уничтожены! Победа!');
+          }
+          break;
+        }
+      }
+      if (!b.alive) continue;
+    } else {
+      // Вражеская пуля -> игрок
+      if (State.player.alive){
+        const half = State.player.size * 0.5;
+        if (Math.abs(nx - State.player.x) <= half && Math.abs(ny - State.player.y) <= half){
+          State.player.alive = false;
+          b.alive = false;
+          sfxExplosion();
+          gameOver(false, 'Вы подбиты!');
+          continue;
+        }
+      }
+    }
+
+    b.x = nx; b.y = ny;
+    if (b.x<0 || b.y<0 || b.x>=State.GRID || b.y>=State.GRID) b.alive = false; // ЗАМЕНИТЬ
+  }
+  State.bullets = State.bullets.filter(b=> b.alive);
+}
+
+// ---------- Игровой цикл ----------
+function loop(ts){
+  if (!State.running) return;
+  if (!State.lastTs) State.lastTs = ts;
+  let dt = (ts - State.lastTs) / 1000;
+  dt = Math.min(dt, 0.05);
+  State.lastTs = ts;
+  State.accum += dt;
+  while (State.accum >= FIXED_DT){
+    stepTank(State.player, FIXED_DT);
+    for (const e of State.enemies) stepTank(e, FIXED_DT);
+    stepBullets(FIXED_DT);
+    State.time += FIXED_DT;
+    State.accum -= FIXED_DT;
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// ---------- Рендер ----------
+function draw(){
+  ctx.fillStyle = COLORS.bg;
+  ctx.fillRect(0,0,canvas.width, canvas.height);
+  drawBoard();
+  drawControls();
+  drawHUD();
+}
+
+function drawBoard(){
+  ctx.save();
+  ctx.translate(view.boardX, view.boardY);
+  // Поле
+  ctx.fillStyle = '#0b0f18';
+  ctx.fillRect(0,0,view.boardSize, view.boardSize);
+  // Сетка
+  ctx.strokeStyle = COLORS.grid;
+  ctx.lineWidth = 1;
+  for(let i=0;i<=State.GRID;i++){
+    const p = i*view.tile;
+    ctx.beginPath(); ctx.moveTo(0,p); ctx.lineTo(view.boardSize,p); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p,0); ctx.lineTo(p,view.boardSize); ctx.stroke();
+  }
+  // Карта
+  for (let y=0;y<State.GRID;y++){
+    for (let x=0;x<State.GRID;x++){
+      const t = State.map[y][x];
+      const px = x*view.tile, py = y*view.tile;
+      if (t === TILE_BRICK){
+        ctx.fillStyle = COLORS.brick;
+        ctx.fillRect(px, py, view.tile, view.tile);
+        ctx.strokeStyle = '#7a3221';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(px, py + view.tile*0.5); ctx.lineTo(px+view.tile, py + view.tile*0.5);
+        ctx.moveTo(px + view.tile*0.5, py); ctx.lineTo(px + view.tile*0.5, py+view.tile);
+        ctx.stroke();
+      } else if (t === TILE_STEEL){
+        ctx.fillStyle = COLORS.steel;
+        ctx.fillRect(px, py, view.tile, view.tile);
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.fillRect(px+2, py+2, view.tile-4, 4);
+        ctx.fillRect(px+2, py+view.tile-6, view.tile-4, 4);
+      } else if (t === TILE_BASE){
+        drawBase(px, py, false);
+      } else if (t === TILE_BASE_ENEMY){
+        drawBase(px, py, true);
+      }
+    }
+  }
+  // Танки
+  if (State.player && State.player.alive) drawTank(State.player, COLORS.tankPlayer);
+  for (const e of State.enemies) { if (e.alive) drawTank(e, COLORS.tankEnemy); }
+  // Пули
+  for (const b of State.bullets){
+    const px = b.x * view.tile;
+    const py = b.y * view.tile;
+    ctx.fillStyle = COLORS.bullet;
+    ctx.beginPath();
+    ctx.arc(px, py, Math.max(2, view.tile*0.12), 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawBase(px, py, enemy){
+  const t = view.tile;
+  ctx.fillStyle = enemy ? COLORS.baseEnemy : COLORS.base;
+  ctx.fillRect(px, py, t, t);
+  // Пиктограмма орла
+  ctx.fillStyle = COLORS.baseEye;
+  // тело
+  ctx.fillRect(px + t*0.2, py + t*0.55, t*0.6, t*0.35);
+  // голова
+  ctx.fillRect(px + t*0.35, py + t*0.3, t*0.3, t*0.3);
+  // клюв
+  ctx.fillRect(px + t*0.6, py + t*0.38, t*0.2, t*0.12);
+  // крылья
+  ctx.fillRect(px + t*0.1, py + t*0.55, t*0.1, t*0.30);
+  ctx.fillRect(px + t*0.8, py + t*0.55, t*0.1, t*0.30);
+}
+
+function drawTank(t, color){
+  const px = (t.x * view.tile);
+  const py = (t.y * view.tile);
+  const sizePx = t.size * view.tile;
+  const half = sizePx/2;
+  ctx.save();
+  // Мы уже в системе координат поля (см. drawBoard → translate).
+  ctx.translate(px, py);
+  const ang = [ 0, Math.PI/2, Math.PI, -Math.PI/2 ][t.dir];
+  ctx.rotate(ang);
+  // Корпус
+  ctx.fillStyle = color;
+  ctx.strokeStyle = '#000a';
+  ctx.lineWidth = 2;
+  roundRect(ctx, -half, -half, sizePx, sizePx, Math.max(2, sizePx*0.12), true, true);
+  // Гусеницы
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillRect(-half, -half, sizePx, sizePx*0.22);
+  ctx.fillRect(-half, half - sizePx*0.22, sizePx, sizePx*0.22);
+  // Башня
+  const turretR = sizePx*0.20;
+  ctx.beginPath(); ctx.arc(0, 0, turretR, 0, Math.PI*2); ctx.fillStyle = '#0008'; ctx.fill();
+  // Ствол
+  ctx.fillStyle = '#eaf2ff';
+  ctx.fillRect(-sizePx*0.05, -sizePx*0.5, sizePx*0.10, sizePx*0.32);
+  ctx.restore();
+}
+
+function roundRect(ctx, x, y, w, h, r, fill, stroke){
+  const rr = Math.min(r, Math.abs(w)/2, Math.abs(h)/2);
+  ctx.beginPath();
+  ctx.moveTo(x+rr, y);
+  ctx.arcTo(x+w, y, x+w, y+h, rr);
+  ctx.arcTo(x+w, y+h, x, y+h, rr);
+  ctx.arcTo(x, y+h, x, y, rr);
+  ctx.arcTo(x, y, x+w, y, rr);
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+function drawControls(){
+  // D‑pad
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(view.dpad.cx, view.dpad.cy, view.dpad.r, 0, Math.PI*2);
+  ctx.fillStyle = COLORS.control; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = COLORS.controlLine; ctx.stroke();
+  // Крест
+  ctx.strokeStyle = COLORS.controlLine;
+  ctx.lineWidth = 3;
+  arrow(view.dpad.cx, view.dpad.cy - view.dpad.r*0.55, 0);
+  arrow(view.dpad.cx + view.dpad.r*0.55, view.dpad.cy, Math.PI/2);
+  arrow(view.dpad.cx, view.dpad.cy + view.dpad.r*0.55, Math.PI);
+  arrow(view.dpad.cx - view.dpad.r*0.55, view.dpad.cy, -Math.PI/2);
+  // Fire
+  ctx.beginPath();
+  ctx.arc(view.fire.cx, view.fire.cy, view.fire.r, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,120,120,0.18)'; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,120,120,0.9)'; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,200,200,0.9)';
+  ctx.font = `${Math.max(12, Math.floor(view.fire.r*0.5))}px system-ui, sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('FIRE', view.fire.cx, view.fire.cy);
+  ctx.restore();
+
+  function arrow(x, y, rot){
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(rot);
+    const len = view.dpad.r * 0.35;
+    ctx.beginPath();
+    ctx.moveTo(0, -len*0.6);
+    ctx.lineTo(0, len*0.6);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(0, -len*0.75);
+    ctx.lineTo(-len*0.2, -len*0.35);
+    ctx.lineTo(len*0.2, -len*0.35);
+    ctx.closePath();
+    ctx.fillStyle = COLORS.controlLine;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawHUD(){
+  const pad = 10;
+  ctx.fillStyle = 'rgba(0,0,0,0.35)';
+  ctx.fillRect(pad, pad, Math.min(view.w - 2*pad, 420), 38);
+  ctx.fillStyle = COLORS.text;
+  ctx.font = '14px system-ui, sans-serif';
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  const alive = State.enemies.filter(e => e.alive).length;
+  const total = State.enemies.length || 0;
+  ctx.fillText(
+    `Ваш штаб: ${State.baseAlive ? 'цел' : 'уничтожен'}   Штаб врага: ${State.baseEnemyAlive ? 'цел' : 'уничтожен'}   Враги: ${alive}/${total}`,
+    pad + 8, pad + 19
+  );
+  if (!State.running){
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0,0,view.w, view.h);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 20px system-ui, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(State.message || 'Игра остановлена', view.w/2, view.h/2);
+    ctx.font = '14px system-ui, sans-serif';
+    ctx.fillText('Откройте лобби и запустите уровень', view.w/2, view.h/2 + 26);
+  }
+}
+
+// ---------- Завершение игры / модалка ----------
+const modal = document.getElementById('modal');
+const modalTitle = document.getElementById('modalTitle');
+const modalText = document.getElementById('modalText');
+const btnOk = document.getElementById('btnOk');
+function openModal(title, text){
+  modalTitle.textContent = title;
+  modalText.textContent = text;
+  modal.classList.add('open');
+}
+function closeModal(){ modal.classList.remove('open'); }
+function gameOver(win, text){
+  State.running = false;
+  State.message = text;
+  if (win) unlockNext(currentStageIndex);
+  openModal(win ? 'Победа!' : 'Поражение', text);
+  musicStop();
+  updateMidbarVis();
+}
+btnOk.addEventListener('click', ()=>{
+  closeModal();
+  document.getElementById('help').classList.add('open');
+  renderLobby(); // обновить статусы/доступность после игры
+});
+
+// ---------- Аудио: Web Audio API ----------
+let actx = null;
+let musicNode = null;
+let musicTimer = null;
+function ensureAudio(){
+  if (!actx){
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+}
+function sfxShoot(){
+  if (!actx) return;
+  const osc = actx.createOscillator();
+  const gain = actx.createGain();
+  osc.type = 'square';
+  osc.frequency.value = 680;
+  const now = actx.currentTime;
+  gain.gain.setValueAtTime(0.0, now);
+  gain.gain.linearRampToValueAtTime(0.25, now + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+  osc.frequency.exponentialRampToValueAtTime(300, now + 0.12);
+  osc.connect(gain).connect(actx.destination);
+  osc.start(now);
+  osc.stop(now + 0.13);
+}
+function sfxHit(){
+  if (!actx) return;
+  const osc = actx.createOscillator();
+  const gain = actx.createGain();
+  osc.type = 'triangle';
+  const now = actx.currentTime;
+  osc.frequency.setValueAtTime(220, now);
+  osc.frequency.exponentialRampToValueAtTime(60, now + 0.18);
+  gain.gain.setValueAtTime(0.3, now);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+  osc.connect(gain).connect(actx.destination);
+  osc.start(now); osc.stop(now + 0.2);
+}
+function sfxExplosion(){
+  if (!actx) return;
+  const noise = actx.createBufferSource();
+  const buffer = actx.createBuffer(1, actx.sampleRate * 0.3, actx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i=0;i<data.length;i++){ data[i] = (Math.random()*2-1) * (1 - i/data.length); }
+  noise.buffer = buffer;
+  const filter = actx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 1200;
+  const gain = actx.createGain();
+  const now = actx.currentTime;
+  gain.gain.setValueAtTime(0.6, now);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32);
+  noise.connect(filter).connect(gain).connect(actx.destination);
+  noise.start(now); noise.stop(now + 0.33);
+}
+// Простая чиптюн‑мелодия
+const melody = [
+  { f: 329.63, d: 0.5 }, // E4
+  { f: 329.63, d: 0.5 }, // E4
+  { f: 329.63, d: 0.5 }, // E4
+  { f: 261.63, d: 0.5 }, // C4
+  { f: 329.63, d: 0.5 }, // E4
+  { f: 392.00, d: 0.5 }, // G4
+  { f: 392.00, d: 0.5 }, // G4
+  { f: 523.25, d: 0.5 }, // C5
+  { f: 392.00, d: 0.5 }, // G4
+  { f: 329.63, d: 0.5 }, // E4
+  { f: 440.00, d: 0.5 }, // A4
+  { f: 493.88, d: 0.5 }, // B4
+  { f: 466.16, d: 0.5 }, // A#4/Bb4
+  { f: 440.00, d: 0.5 }, // A4
+  { f: 392.00, d: 0.5 }, // G4
+  { f: 329.63, d: 0.5 }, // E4
+  { f: 392.00, d: 0.5 }, // G4
+  { f: 440.00, d: 0.5 }, // A4
+  { f: 349.23, d: 0.5 }, // F4
+  { f: 392.00, d: 0.5 }, // G4
+  { f: 329.63, d: 0.5 }, // E4
+  { f: 261.63, d: 0.5 }, // C4
+  { f: 392.00, d: 1.0 }, // G4 (закрываем фразу подольше)
+];
+function musicStart() {
+   if (musicMuted) return;
+  if (!actx) return;
+
+  // Останавливаем предыдущий запуск, если был
+  musicStop();
+
+  // Безопасно резюмируем AudioContext (на случай, если он "suspended")
+  if (actx.state === 'suspended') {
+    try { actx.resume(); } catch {}
+  }
+
+  // Создаём узлы
+  const gain = actx.createGain();
+  const osc = actx.createOscillator();
+
+  // Базовые настройки
+  const maxGain = 0.14;          // пиковый уровень громкости ноты
+  gain.gain.setValueAtTime(0.001, actx.currentTime);
+  gain.connect(actx.destination);
+
+  osc.type = 'square';
+  osc.connect(gain);
+  osc.start();
+
+  // Сохраняем узлы глобально для stop()
+  musicNode = { osc, gain };
+
+  // Планировщик по BPM
+  const BPM = 100;               // маршевый темп
+  const beatMs = 60000 / BPM;    // длительность четвертной в мс
+  let idx = 0;
+
+  const scheduleNext = () => {
+    if (!musicNode) return;
+
+    const n = melody[idx];
+    const now = actx.currentTime;
+
+    // Длительность ноты (в мс/сек)
+    const noteMs = Math.max(30, ((n?.d || 1) * beatMs));
+    const noteSec = noteMs / 1000;
+
+    // Gate для отрывистости (≈60% длительности, но не меньше 60 мс)
+    const gateSec = Math.max(0.06, noteSec * 0.6);
+
+    // Программируем частоту и огибающую
+    if (n && n.f > 0) {
+      musicNode.osc.frequency.setValueAtTime(n.f, now);
+
+      // Сброс расписания и тихий старт
+      musicNode.gain.gain.cancelScheduledValues(now);
+      musicNode.gain.gain.setValueAtTime(0.001, now);
+
+      // Атака до максимума
+      musicNode.gain.gain.setTargetAtTime(maxGain, now, 0.01);
+
+      // Релиз (стаккато)
+      musicNode.gain.gain.setTargetAtTime(0.001, now + gateSec, 0.02);
+    } else {
+      // Пауза: принудительно заглушаем
+      musicNode.gain.gain.cancelScheduledValues(now);
+      musicNode.gain.gain.setTargetAtTime(0.001, now, 0.01);
+    }
+
+    // Следующая нота
+    idx = (idx + 1) % melody.length;
+
+    // Планируем следующий вызов по длительности текущей ноты
+    musicTimer = window.setTimeout(scheduleNext, noteMs);
+  };
+
+  // Старт планировщика
+  scheduleNext();
+}
+function musicStop() {
+  if (musicTimer) { clearTimeout(musicTimer); musicTimer = null; }
+  if (musicNode) {
+    try {
+      const now = actx.currentTime;
+      musicNode.gain.gain.setTargetAtTime(0.001, now, 0.02);
+      musicNode.osc.stop(now + 0.05);
+    } catch {}
+    try { musicNode.gain.disconnect(); } catch {}
+    musicNode = null;
+  }
+}
+
+// ---------- Лобби рендер ----------
+const help = document.getElementById('help');
+const stageListEl = document.getElementById('stageList');
+function renderLobby(){
+  stageListEl.innerHTML = '';
+  const maxUnlocked = getMaxUnlocked(); // id
+  // по умолчанию выбрать последний доступный
+  if (selectedStageIndex > maxUnlocked - 1) selectedStageIndex = maxUnlocked - 1;
+
+  STAGES.forEach((st, idx) => {
+    const unlocked = (st.id <= maxUnlocked);
+    const passed = (st.id < maxUnlocked);
+    const item = document.createElement('label');
+    item.className = 'stage-item' + (unlocked ? '' : ' locked');
+
+    const radio = document.createElement('input');
+    radio.type = 'radio';
+    radio.name = 'stage';
+    radio.value = String(idx);
+    radio.disabled = !unlocked;
+    radio.checked = (idx === selectedStageIndex);
+    radio.addEventListener('change', () => {
+      if (!radio.disabled) selectedStageIndex = idx;
+    });
+
+    const name = document.createElement('span');
+    name.className = 'name';
+    name.textContent = st.name;
+
+    const status = document.createElement('span');
+    status.className = 'status';
+    status.textContent = unlocked ? (passed ? 'Пройден' : 'Доступен') : 'Заблокирован';
+
+    item.appendChild(radio);
+    item.appendChild(name);
+    item.appendChild(status);
+    stageListEl.appendChild(item);
+  });
+}
+
+// ---------- Вспомогательное ----------
+function rand(a,b){ return a + Math.random()*(b-a); }
+
+// ---------- Старт / UI ----------
+document.getElementById('btnStart').addEventListener('click', ()=>{
+  ensureAudio();
+  musicStart();
+  // Зафиксировать выбор и стартануть
+  currentStageIndex = selectedStageIndex;
+  help.classList.remove('open');
+  resetGame();
+  resize();
+  requestAnimationFrame(loop);
+});
+
+// Кнопка музыки
+document.getElementById('btnMusic').addEventListener('click', ()=>{
+  musicMuted = !musicMuted;
+  localStorage.setItem(LS_MUSIC_KEY, musicMuted ? '1' : '0');
+  updateMusicBtn();
+  if (musicMuted) {
+    musicStop();
+  } else {
+    ensureAudio();
+    if (State.running) musicStart();
+  }
+});
+
+// Кнопка выхода с уровня
+document.getElementById('btnExit').addEventListener('click', ()=>{
+  musicStop();
+  State.running = false;
+  State.message = '';
+  updateMidbarVis();
+  document.getElementById('help').classList.add('open');
+  renderLobby();
+  draw();
+  updateMusicBtn();    
+updateMidbarVis();    // ДОБАВИТЬ
+});
+// ---------- Запуск ----------
+resize();
+renderLobby();
+draw();
+</script>
+</body>
+</html>

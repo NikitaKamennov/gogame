@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Тетрис — мобильная версия</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <style>
+    :root{
+      --bg:#141824;
+      --panel:#1b2030;
+      --panel-2:#20263a;
+      --text:#e8ecff;
+      --muted:#9aa4c7;
+      --accent:#7c9fff;
+      --accent-2:#00d4ff;
+      --border:#2c3657;
+      --ok:#28a745;
+      --shadow:0 10px 40px rgba(0,0,0,0.35);
+      /* Адаптивные размеры кнопок управления */
+      --btn:clamp(150px, 11vw, 64px);
+      --btn-small:clamp(40px, 9vw, 52px);
+      --gap:10px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      background:
+        radial-gradient(900px 480px at 10% -10%, rgba(0,212,255,0.10), transparent 60%),
+        radial-gradient(900px 480px at 90% 0%, rgba(124,159,255,0.10), transparent 60%),
+        linear-gradient(180deg, var(--bg), #0e1226 60%, var(--bg));
+      color:var(--text);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .viewport{
+      min-height:100dvh;
+      display:flex;
+      flex-direction:column;
+      padding:10px 12px calc(env(safe-area-inset-bottom) + 10px);
+      gap:10px;
+    }
+    /* Игровой блок + HUD + основной блок управления вместе должны помещаться во вьюпорт */
+    .game-panel{
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:14px;
+      box-shadow:var(--shadow);
+      padding:10px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+    }
+    .game-wrap{
+      position:relative;
+      display:grid;
+      place-items:center;
+      padding:6px;
+      background:var(--panel-2);
+      border-radius:12px;
+      border:1px solid var(--border);
+      overflow:hidden;
+    }
+    canvas#game{
+      display:block;
+      background:#10131f;
+      border-radius:10px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06), 0 10px 30px rgba(0,0,0,0.35);
+    }
+    /* Мини-превью следующей фигуры (максимально компактное) */
+    .next-overlay{
+      position:absolute;
+      top:6px; right:6px;
+      background:rgba(0,0,0,0.30);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:8px;
+      padding:4px 4px 3px;
+      backdrop-filter: blur(3px);
+      display:grid;
+      justify-items:center;
+      gap:2px;
+      z-index:5;
+      user-select:none;
+    }
+    .next-overlay .title{
+      font-size:10px;
+      color:#cfd6ff;
+      letter-spacing:.3px;
+      opacity:.9;
+    }
+    canvas#next{
+      display:block;
+      background:#0e1120;
+      border-radius:6px;
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,0.06);
+    }
+    /* HUD (минимум информации) */
+    .hud{
+      display:grid;
+      grid-template-columns: repeat(3, minmax(0,1fr));
+      gap:8px;
+      font-size:13px;
+      color:var(--muted);
+    }
+    .hud > div{white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+    /* Основные экранные кнопки (в кадре) */
+    .controls{
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px;
+      display:grid;
+      grid-template-columns: 1fr 1fr; /* слева блок dpad, справа поворот+дроп */
+      gap:var(--gap);
+      user-select:none;
+      touch-action:none;
+      box-shadow:var(--shadow);
+    }
+    .dpad{
+      display:grid;
+      gap:var(--gap);
+      grid-template-rows: var(--btn) var(--btn);
+    }
+    .dpad-row{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap:var(--gap);
+    }
+    .right-stack{
+      display:grid;
+      grid-template-rows: calc(var(--btn) * 2 + var(--gap)) var(--btn-small);
+      gap:var(--gap);
+    }
+    .tbtn{
+      display:inline-grid;
+      place-items:center;
+      height:var(--btn);
+      border-radius:12px;
+      border:1px solid var(--border);
+      background: linear-gradient(180deg, #2a3353, #202742);
+      color:#eaf0ff;
+      font-weight:700;
+      letter-spacing:.2px;
+      cursor:pointer;
+      box-shadow:var(--shadow);
+      font-size:18px;
+    }
+    .tbtn:active{ transform: translateY(1px); filter:brightness(0.95); }
+    .tbtn.primary{
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color:#001221;
+      border:none;
+    }
+    .tbtn.small{ height:var(--btn-small); font-size:16px; }
+    .tbtn.rotate{ height: calc(var(--btn) * 2 + var(--gap)); font-size:20px; }
+    /* Статус/подсказки */
+    .status{
+      margin-top:2px; padding:8px;
+      background: rgba(124,159,255,0.12);
+      border:1px solid rgba(124,159,255,0.35);
+      border-radius:10px;
+      min-height:20px;
+      color:#e8ecff;
+      font-size:13px;
+    }
+    /* Доп. панель ниже (доступна по свайпу вниз) */
+    .more{
+      margin-top:10px;
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:14px;
+      box-shadow:var(--shadow);
+      padding:10px;
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+    .more-row{ display:flex; gap:10px; }
+    .more .tbtn{ flex:1; height:44px; font-size:15px; }
+    .top-list{
+      display:grid; gap:6px; font-size:13px; color:var(--muted);
+    }
+    .top-list .item{
+      display:flex; justify-content:space-between; align-items:center;
+      padding:8px 10px;
+      border:1px solid var(--border);
+      border-radius:10px;
+      background:#18203a;
+      color:#e8ecff;
+    }
+    /* Простая модалка для Game Over */
+    .modal{ position:fixed; inset:0; background:rgba(0,0,0,0.45); display:none; align-items:center; justify-content:center; z-index:1000; }
+    .modal.open{ display:flex; }
+    .modal-content{
+      width:90%; max-width:400px;
+      background:var(--panel);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:16px;
+      box-shadow:var(--shadow);
+    }
+    .modal-content h3{ margin:0 0 8px; font-size:18px; color:var(--text); }
+    .modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:10px; }
+  </style>
+</head>
+<body>
+  <main class="viewport">
+    <!-- Игровая панель (вся вьюпортная область) -->
+    <section class="game-panel" id="gamePanel">
+      <div id="gameWrap" class="game-wrap" aria-label="Игровое поле">
+        <canvas id="game" width="300" height="600"></canvas>
+        <!-- Компактное окошко следующей фигуры (уменьшено максимально) -->
+        <div class="next-overlay" aria-hidden="true">
+          <div class="title">Следующая</div>
+          <canvas id="next" width="56" height="56"></canvas>
+        </div>
+      </div>
+
+      <!-- HUD -->
+      <div class="hud" id="hud">
+        <div id="hudScore">Очки: 0</div>
+        <div id="hudBest">Рекорд: 0</div>
+        <div id="hudSpeed">Скорость: 800мс</div>
+      </div>
+
+      <!-- Основные экранные кнопки (в кадре) -->
+      <div class="controls" id="controls">
+        <!-- Слева: ← → , ниже ↓ -->
+        <div class="dpad">
+          <div class="dpad-row">
+            <button id="btnLeft"  class="tbtn" aria-label="Влево">←</button>
+            <button id="btnRight" class="tbtn" aria-label="Вправо">→</button>
+            <br>  <br>
+          </div>
+          <button id="btnDown" class="tbtn" aria-label="Вниз (ускорить)">↓</button>
+        </div>
+        <!-- Справа: большая Повернуть, ниже маленькая DROP -->
+        <div class="right-stack">
+          <button id="btnRotCW" class="tbtn rotate primary" aria-label="Повернуть">⟳ Повернуть</button>
+          <button id="btnDrop" class="tbtn small" aria-label="Уронить">⤓ Уронить</button>
+        </div>
+      </div>
+
+      <div id="status" class="status">Нажмите любую кнопку управления, чтобы начать игру.</div>
+    </section>
+
+    <!-- Ниже по свайпу: Старт/Пауза и Топ‑10 -->
+    <section class="more">
+      <div class="more-row">
+        <button id="btnStartPause" class="tbtn primary">Старт</button>
+        <button id="btnShowTop" class="tbtn">Топ‑10</button>
+      </div>
+      <div id="topBox" class="top-list" style="display:none;">
+        <!-- Заполняется из JS -->
+      </div>
+    </section>
+  </main>
+
+  <!-- Модалка Game Over -->
+  <div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-content">
+      <h3 id="modalTitle">Игра окончена</h3>
+      <div id="modalText" class="status" style="margin:8px 0 0">Очки: 0</div>
+      <div class="modal-actions">
+        <button id="modalOk" class="tbtn primary" style="height:44px;min-width:120px;">ОК</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- Константы поля ---
+    const COLS = 10, ROWS = 20;
+    let CELL = 30; // вычисляется динамически
+
+    // --- Счёт/скорость/борд ---
+    let board = [];         // ROWS x COLS (0/цвет-id)
+    let running = false;    // идёт ли игра
+    let score = 0;          // очки за текущую сессию
+    let dropInterval = 800; // текущий интервал падения (мс)
+    let lastTime = 0, acc = 0, animationId = null;
+
+    // Текущая и следующая фигуры
+    let cur = null;  // { id, m, x, y }
+    let next = null;
+
+    // --- Топ‑10 (localStorage) ---
+    const TOP_KEY = 'tetris_top10';
+    function loadTop(){
+      try{ const raw = localStorage.getItem(TOP_KEY); return Array.isArray(JSON.parse(raw)) ? JSON.parse(raw) : []; }
+      catch{ return []; }
+    }
+    function saveTop(list){ localStorage.setItem(TOP_KEY, JSON.stringify(list)); }
+    function pushTop(s){
+      const list = loadTop();
+      const item = { score: s, at: Date.now() };
+      list.push(item);
+      list.sort((a,b)=> b.score - a.score || a.at - b.at);
+      const top10 = list.slice(0,10);
+      saveTop(top10);
+      renderTop(top10);
+      return top10[0]?.score || s;
+    }
+    function renderTop(list = loadTop()){
+      const box = document.getElementById('topBox');
+      box.innerHTML = '';
+      if(!list.length){
+        const div = document.createElement('div');
+        div.className = 'item';
+        div.textContent = 'Пока нет результатов. Сыграйте первую партию!';
+        box.appendChild(div);
+        return;
+      }
+      list.forEach((it, idx)=>{
+        const row = document.createElement('div');
+        row.className = 'item';
+        const left = document.createElement('div');
+        left.textContent = (idx+1) + '. ' + it.score + ' очков';
+        const right = document.createElement('div');
+        const d = new Date(it.at);
+        right.textContent = d.toLocaleDateString() + ' ' + d.toLocaleTimeString().slice(0,5);
+        row.appendChild(left); row.appendChild(right);
+        box.appendChild(row);
+      });
+    }
+
+    // --- DOM ---
+    const wrap = document.getElementById('gameWrap');
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    const nextCanvas = document.getElementById('next');
+    const nextCtx = nextCanvas.getContext('2d');
+
+    const hudScore = document.getElementById('hudScore');
+    const hudBest  = document.getElementById('hudBest');
+    const hudSpeed = document.getElementById('hudSpeed');
+    const hudEl    = document.getElementById('hud');
+    const controlsEl = document.getElementById('controls');
+
+    const statusEl = document.getElementById('status');
+
+    // Кнопки управления
+    const btnLeft  = document.getElementById('btnLeft');
+    const btnRight = document.getElementById('btnRight');
+    const btnDown  = document.getElementById('btnDown');
+    const btnRotCW = document.getElementById('btnRotCW');
+    const btnDrop  = document.getElementById('btnDrop');
+
+    // Доп. кнопки (ниже по свайпу)
+    const btnStartPause = document.getElementById('btnStartPause');
+    const btnShowTop = document.getElementById('btnShowTop');
+    const topBox = document.getElementById('topBox');
+
+    // Модалка
+    const modal = document.getElementById('modal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalText = document.getElementById('modalText');
+    const modalOk = document.getElementById('modalOk');
+    modalOk.onclick = ()=> closeModal();
+
+    // --- Аудио (WebAudio) ---
+    const AudioT = (() => {
+      let ctx = null, master = null, musicGain = null, sfxGain = null;
+      let musicTimer = null, playing = false, currentNote = null;
+
+      function init(){ if(ctx) return true;
+        try{
+          ctx = new (window.AudioContext||window.webkitAudioContext)();
+          master = ctx.createGain(); master.gain.value = 0.18;
+          musicGain = ctx.createGain(); musicGain.gain.value = 0.06;
+          sfxGain = ctx.createGain(); sfxGain.gain.value = 0.22;
+          musicGain.connect(master); sfxGain.connect(master); master.connect(ctx.destination);
+          return true;
+        }catch{ return false; }
+      }
+      function resume(){ if(ctx && ctx.state==='suspended') ctx.resume(); }
+      function stopCurrentNote(){ if(currentNote){ try{ currentNote.osc.stop(); }catch{} currentNote=null; } }
+      function sfxTone(freq=440, dur=0.08, type='square', vol=1.0){
+        if(!ctx) return;
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = type; o.frequency.value = freq; g.gain.value = Math.max(0.0001, vol);
+        o.connect(g).connect(sfxGain);
+        const now = ctx.currentTime;
+        g.gain.setValueAtTime(g.gain.value, now);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+        o.start(now); o.stop(now + dur + 0.02);
+      }
+      function turn(){ sfxTone(820, 0.05, 'square', 0.9); }
+      function lock(){
+        if(!ctx) return;
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type='triangle'; const now=ctx.currentTime;
+        o.frequency.setValueAtTime(180, now);
+        o.frequency.exponentialRampToValueAtTime(120, now + 0.09);
+        g.gain.value=0.7; g.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+        o.connect(g).connect(sfxGain); o.start(now); o.stop(now + 0.12);
+      }
+      function clear(lines=1){
+        const base=520;
+        for(let i=0;i<lines;i++){
+          setTimeout(()=>{
+            sfxTone(base + i*80, 0.07, 'square', 0.9);
+            setTimeout(()=> sfxTone(base + i*80 + 120, 0.07, 'square', 0.9), 55);
+            setTimeout(()=> sfxTone(base + i*80 + 220, 0.08, 'square', 0.9), 110);
+          }, i*140);
+        }
+      }
+      function gameOver(){
+        if(!ctx) return;
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type='sawtooth'; const now=ctx.currentTime;
+        o.frequency.setValueAtTime(700, now);
+        o.frequency.exponentialRampToValueAtTime(120, now + 1.0);
+        g.gain.value=0.9; g.gain.exponentialRampToValueAtTime(0.0001, now + 1.0);
+        o.connect(g).connect(sfxGain); o.start(now); o.stop(now + 1.05);
+      }
+      const MELODY = [
+        {f:523,d:0.5},{f:659,d:0.5},{f:784,d:0.5},{f:659,d:0.5},
+        {f:587,d:0.5},{f:698,d:0.5},{f:880,d:0.5},{f:698,d:0.5},
+        {f:659,d:0.5},{f:523,d:0.5},{f:392,d:0.75},{f:0,d:0.25}
+      ];
+      const TEMPO=138, BEAT=60/TEMPO;
+      function playNote(freq, beats){
+        if(!ctx) return;
+        stopCurrentNote(); if(freq<=0){ currentNote=null; return; }
+        const o=ctx.createOscillator(), g=ctx.createGain();
+        o.type='triangle'; o.frequency.value=freq;
+        const now=ctx.currentTime, dur=Math.max(0.1, beats*BEAT);
+        g.gain.value=0.0001; g.gain.exponentialRampToValueAtTime(0.08, now+0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + dur);
+        o.connect(g).connect(musicGain); o.start(now); o.stop(now + dur + 0.02);
+        currentNote={osc:o};
+      }
+      function loop(i=0){
+        if(!playing) return;
+        const n=MELODY[i % MELODY.length];
+        playNote(n.f, n.d);
+        const wait=Math.max(80, n.d*BEAT*1000);
+        musicTimer=setTimeout(()=> loop((i+1)%MELODY.length), wait);
+      }
+      function startMusic(){ if(!ctx || playing) return; playing=true; loop(0); }
+      function pauseMusic(){ playing=false; if(musicTimer){ clearTimeout(musicTimer); musicTimer=null; } stopCurrentNote(); }
+      function stopMusic(){ pauseMusic(); }
+      return { init, resume, startMusic, pauseMusic, stopMusic, turn, lock, clear, gameOver };
+    })();
+
+    // --- Фигуры/цвета ---
+    const COLORS = { 1:'#00BCD4',2:'#3F51B5',3:'#FF9800',4:'#FFEB3B',5:'#4CAF50',6:'#9C27B0',7:'#F44336' };
+    const SHAPES = [
+      { id:1, m:[[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]] }, // I
+      { id:2, m:[[1,0,0],[1,1,1],[0,0,0]] },               // J
+      { id:3, m:[[0,0,1],[1,1,1],[0,0,0]] },               // L
+      { id:4, m:[[1,1],[1,1]] },                           // O
+      { id:5, m:[[0,1,1],[1,1,0],[0,0,0]] },               // S
+      { id:6, m:[[0,1,0],[1,1,1],[0,0,0]] },               // T
+      { id:7, m:[[1,1,0],[0,1,1],[0,0,0]] }                // Z
+    ];
+    function cloneMatrix(m){ return m.map(r=> r.slice()); }
+    function rotateCW(m){ const n=m.length,res=Array.from({length:n},()=>Array(n).fill(0)); for(let y=0;y<n;y++)for(let x=0;x<n;x++)res[x][n-1-y]=m[y][x]; return res; }
+    function rotateCCW(m){ const n=m.length,res=Array.from({length:n},()=>Array(n).fill(0)); for(let y=0;y<n;y++)for(let x=0;x<n;x++)res[n-1-x][y]=m[y][x]; return res; }
+    function randomShape(){ const s=SHAPES[Math.floor(Math.random()*SHAPES.length)]; return { id:s.id, m:cloneMatrix(s.m) }; }
+
+    // --- Сервисные функции ---
+    function setStatus(msg, isError){ statusEl.textContent=msg; statusEl.style.color = isError ? '#ffb3b3' : '#e8ecff'; }
+    function vibrate(ms=10){ if('vibrate' in navigator) try{ navigator.vibrate(ms); }catch{} }
+
+    // --- Игра ---
+    function prepareBoard(){
+      board = Array.from({length:ROWS},()=> Array(COLS).fill(0));
+      cur = null; next = randomShape();
+      acc = 0; lastTime = 0;
+      score = 0;
+      dropInterval = 800;
+      updateHud();
+      resizeBoard();
+      draw(); drawNext();
+      setStatus('Нажмите любую кнопку управления, чтобы начать игру.');
+    }
+
+    function startGame(){
+      if(running) return;
+      if(!cur) spawnPiece();
+      running = true;
+      lastTime = performance.now();
+      animationId = requestAnimationFrame(loop);
+      AudioT.init(); AudioT.resume(); AudioT.startMusic();
+      setStatus('Игра началась. Удачи!');
+      updateStartButton();
+    }
+
+    function pauseGame(){
+      if(!running) return;
+      running = false;
+      if(animationId) cancelAnimationFrame(animationId);
+      setStatus('Пауза.');
+      updateStartButton();
+    }
+
+    function toggleStartPause(){
+      if(running) pauseGame(); else startGame();
+    }
+
+    function gameOver(){
+      running = false;
+      if(animationId) cancelAnimationFrame(animationId);
+      AudioT.stopMusic();
+      AudioT.gameOver();
+      // Запись в Топ‑10
+      const best = pushTop(score);
+      hudBest.textContent = 'Рекорд: ' + best;
+      modalText.textContent = 'Очки: ' + score;
+      openModal('Игра окончена');
+      setStatus('Игра окончена. Очки: ' + score);
+      updateStartButton();
+    }
+
+    function spawnPiece(){
+      cur = next ? { id: next.id, m: cloneMatrix(next.m), x: 3, y: -2 } : { id: randomShape().id, m: randomShape().m, x: 3, y: -2 };
+      next = randomShape();
+      drawNext();
+      if(collides(cur.m, cur.x, cur.y)) gameOver();
+    }
+
+    function collides(m, offX, offY){
+      const n = m.length;
+      for(let y=0;y<n;y++) for(let x=0;x<n;x++){
+        if(!m[y][x]) continue;
+        const px = offX + x, py = offY + y;
+        if(py < 0) continue;
+        if(px < 0 || px >= COLS || py >= ROWS) return true;
+        if(board[py][px]) return true;
+      }
+      return false;
+    }
+
+    function move(dx, dy){
+      if(!cur) return false;
+      const nx = cur.x + dx, ny = cur.y + dy;
+      if(!collides(cur.m, nx, ny)){ cur.x=nx; cur.y=ny; return true; }
+      return false;
+    }
+
+    function hardDrop(){
+      if(!cur) return;
+      while(move(0,1)){}
+      lockPiece();
+      clearLinesAndScore();
+      spawnPiece();
+      draw();
+      vibrate(10);
+    }
+
+    function rotate(dir){
+      if(!cur) return;
+      let m = dir === 1 ? rotateCW(cur.m) : rotateCCW(cur.m);
+      const kicks=[0,-1,1,-2,2];
+      for(let i=0;i<kicks.length;i++){
+        const nx = cur.x + kicks[i];
+        if(!collides(m, nx, cur.y)){
+          cur.m=m; cur.x=nx; AudioT.turn(); return;
+        }
+      }
+    }
+
+    function lockPiece(){
+      const n = cur.m.length;
+      for(let y=0;y<n;y++) for(let x=0;x<n;x++){
+        if(!cur.m[y][x]) continue;
+        const px = cur.x + x, py = cur.y + y;
+        AudioT.lock();
+        if(py < 0){ gameOver(); return; }
+        board[py][px] = cur.id;
+      }
+    }
+
+    function clearLinesAndScore(){
+      let lines=0;
+      for(let y=ROWS-1;y>=0;){
+        if(board[y].every(v=> v!==0)){
+          board.splice(y,1);
+          board.unshift(Array(COLS).fill(0));
+          lines++;
+        }else y--;
+      }
+      if(lines>0){
+        AudioT.clear(lines);
+        const base = [0,100,300,500,800][lines] || 0;
+        score += base;
+        updateSpeedByScore();
+        updateHud();
+        setStatus('Собрано линий: ' + lines + '. +' + base + ' очков.');
+      }
+    }
+
+    // Скорость растёт ступенчато: каждые 400 очков — на 40мс быстрее, минимум 100мс
+    function updateSpeedByScore(){
+      const decPerStep = 40;  // уменьшение мс на шаг
+      const stepPoints = 400; // шаг очков
+      const minInterval = 100;
+      const base = 800;
+      const steps = Math.floor(score / stepPoints);
+      dropInterval = Math.max(minInterval, base - steps * decPerStep);
+    }
+
+    function loop(time){
+      const delta = time - lastTime;
+      lastTime = time;
+      acc += delta;
+      if(acc >= dropInterval){
+        if(!move(0,1)){ lockPiece(); clearLinesAndScore(); spawnPiece(); }
+        acc = 0;
+      }
+      draw();
+      if(running) animationId = requestAnimationFrame(loop);
+    }
+
+    // --- Отрисовка ---
+    function clearCanvas(){
+      ctx.fillStyle = '#10131f';
+      ctx.fillRect(0,0,canvas.width, canvas.height);
+    }
+    function drawCell(gx, gy, id){
+      const x=gx*CELL, y=gy*CELL;
+      const color = COLORS[id] || '#888';
+      ctx.fillStyle=color; ctx.fillRect(x,y,CELL,CELL);
+      ctx.fillStyle='rgba(255,255,255,0.12)'; ctx.fillRect(x,y,CELL,3);
+      ctx.fillStyle='rgba(0,0,0,0.25)'; ctx.fillRect(x,y+CELL-3,CELL,3);
+      ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.strokeRect(x+0.5,y+0.5,CELL-1,CELL-1);
+    }
+    function drawGrid(){
+      ctx.strokeStyle='#1b2136'; ctx.lineWidth=1;
+      for(let x=0;x<=COLS;x++){ ctx.beginPath(); ctx.moveTo(x*CELL+0.5,0); ctx.lineTo(x*CELL+0.5,ROWS*CELL); ctx.stroke(); }
+      for(let y=0;y<=ROWS;y++){ ctx.beginPath(); ctx.moveTo(0,y*CELL+0.5); ctx.lineTo(COLS*CELL,y*CELL+0.5); ctx.stroke(); }
+    }
+    function draw(){
+      clearCanvas();
+      for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){ const id=board[y][x]; if(id) drawCell(x,y,id); }
+      if(cur){
+        const n=cur.m.length;
+        for(let y=0;y<n;y++) for(let x=0;x<n;x++){
+          if(!cur.m[y][x]) continue;
+          const gx=cur.x+x, gy=cur.y+y;
+          if(gy>=0) drawCell(gx,gy,cur.id);
+        }
+      }
+      drawGrid();
+    }
+    function drawNext(){
+      nextCtx.fillStyle = '#0e1120';
+      nextCtx.fillRect(0,0,nextCanvas.width,nextCanvas.height);
+      if(!next) return;
+      const m=next.m, n=m.length;
+      const prevCell = Math.floor(nextCanvas.width / 4);
+      const offsetX = Math.floor((4 - n)/2);
+      const offsetY = Math.floor((4 - n)/2);
+      nextCtx.strokeStyle='#222a46'; nextCtx.lineWidth=1;
+      for(let i=0;i<=4;i++){
+        nextCtx.beginPath(); nextCtx.moveTo(0.5 + i*prevCell,0); nextCtx.lineTo(0.5+i*prevCell,4*prevCell); nextCtx.stroke();
+        nextCtx.beginPath(); nextCtx.moveTo(0,0.5 + i*prevCell); nextCtx.lineTo(4*prevCell,0.5+i*prevCell); nextCtx.stroke();
+      }
+      for(let y=0;y<n;y++) for(let x=0;x<n;x++){
+        if(!m[y][x]) continue;
+        const gx=(x+offsetX)*prevCell, gy=(y+offsetY)*prevCell;
+        const color=COLORS[next.id] || '#888';
+        nextCtx.fillStyle=color; nextCtx.fillRect(gx,gy,prevCell,prevCell);
+        nextCtx.fillStyle='rgba(255,255,255,0.12)'; nextCtx.fillRect(gx,gy,prevCell,2);
+        nextCtx.fillStyle='rgba(0,0,0,0.25)'; nextCtx.fillRect(gx,gy+prevCell-2,prevCell,2);
+        nextCtx.strokeStyle='rgba(0,0,0,0.35)'; nextCtx.strokeRect(gx+0.5,gy+0.5,prevCell-1,prevCell-1);
+      }
+    }
+
+    // --- Адаптивный размер поля/превью (поле+HUD+кнопки = 1 экран) ---
+    function resizeBoard(){
+      // 1) Ширина поля ограничена шириной контейнера
+      const wrapWidth = Math.floor(wrap.clientWidth - 12);
+      // 2) Высота, доступная под канвас: высота окна минус HUD и блок кнопок и внутренние отступы
+      const vpH = window.innerHeight;
+      const controlsH = Math.ceil(controlsEl.offsetHeight) + 12;
+      const hudH = Math.ceil(hudEl.offsetHeight) + 8;
+      const panelPadding = 10 + 10; // сверху+снизу padding game-panel
+      const availableH = Math.max(120, vpH - controlsH - hudH - panelPadding - 12);
+
+      const byWidth = Math.floor(wrapWidth / COLS);
+      const byHeight = Math.floor(availableH / ROWS);
+      const newCell = Math.max(12, Math.min(40, Math.min(byWidth, byHeight)));
+
+      CELL = newCell;
+      canvas.width  = COLS * CELL;
+      canvas.height = ROWS * CELL;
+
+      // Сильно уменьшенное превью: 44..72 px, не мешает экрану
+      const nextSize = Math.max(44, Math.min(72, Math.floor(CELL * 2.4)));
+      nextCanvas.width = nextSize;
+      nextCanvas.height = nextSize;
+
+      draw(); drawNext();
+      updateHud();
+    }
+
+    // --- Ввод: клавиатура (десктоп) ---
+    function onKey(e){
+      const code = e.code || e.key;
+      if(code === 'Space' && !running){ startGame(); e.preventDefault(); return; }
+      if(!running) return;
+      if(code==='ArrowLeft'){ move(-1,0); e.preventDefault(); }
+      else if(code==='ArrowRight'){ move(1,0); e.preventDefault(); }
+      else if(code==='ArrowDown'){ if(!move(0,1)){ lockPiece(); clearLinesAndScore(); spawnPiece(); } e.preventDefault(); }
+      else if(code==='ArrowUp'){ rotate(1); e.preventDefault(); }
+      else if(code==='KeyZ'){ rotate(-1); e.preventDefault(); }
+      else if(code==='Space'){ hardDrop(); e.preventDefault(); }
+    }
+
+    // --- Ввод: экранные кнопки с удержанием ---
+    const REPEAT_DELAY = 160, REPEAT_RATE = 55;
+    function addHold(btn, fireOnce, repeat=true){
+      let tId=null, iId=null, active=false;
+      const start = (e)=>{
+        e.preventDefault();
+        // Если игра на паузе — первая попытка управления запускает игру
+        if(!running) startGame();
+        if(active) return;
+        active = true;
+        fireOnce();
+        if(repeat){
+          tId = setTimeout(()=>{ iId = setInterval(fireOnce, REPEAT_RATE); }, REPEAT_DELAY);
+        }
+        vibrate(6);
+      };
+      const end = ()=>{
+        active=false;
+        if(tId){ clearTimeout(tId); tId=null; }
+        if(iId){ clearInterval(iId); iId=null; }
+      };
+      btn.addEventListener('touchstart', start, { passive:false });
+      btn.addEventListener('touchend', end);
+      btn.addEventListener('touchcancel', end);
+      btn.addEventListener('mousedown', start);
+      btn.addEventListener('mouseup', end);
+      btn.addEventListener('mouseleave', end);
+    }
+
+    // --- HUD/кнопки ---
+    function updateHud(){
+      hudScore.textContent = 'Очки: ' + score;
+      hudSpeed.textContent = 'Скорость: ' + dropInterval + 'мс';
+      const top = loadTop();
+      const best = top.length ? top[0].score : Math.max(score, 0);
+      hudBest.textContent = 'Рекорд: ' + best;
+      updateStartButton();
+    }
+    function updateStartButton(){
+      btnStartPause.textContent = running ? 'Пауза' : 'Старт';
+    }
+
+    // --- Модалка ---
+    function openModal(title){
+      modalTitle.textContent = title || 'Сообщение';
+      modal.classList.add('open');
+    }
+    function closeModal(){
+      modal.classList.remove('open');
+      // Готовы к новой игре: сбросить поле и начать при следующем действии
+      prepareBoard();
+    }
+
+    // --- Инициализация ---
+    function init(){
+      // Инициализация борда/Топ‑10
+      renderTop(); prepareBoard();
+
+      // Кнопки управления
+      addHold(btnLeft,  ()=> move(-1,0));
+      addHold(btnRight, ()=> move(1,0));
+      addHold(btnDown,  ()=> { if(!move(0,1)){ lockPiece(); clearLinesAndScore(); spawnPiece(); } }, true);
+      addHold(btnRotCW, ()=> rotate(1), false);
+      addHold(btnDrop,  ()=> hardDrop(), false);
+
+      // Доп. действия
+      btnStartPause.addEventListener('click', ()=>{ AudioT.init(); AudioT.resume(); toggleStartPause(); });
+      btnShowTop.addEventListener('click', ()=>{
+        const vis = topBox.style.display !== 'none';
+        topBox.style.display = vis ? 'none' : 'grid';
+      });
+
+      // Ввод с клавиатуры
+      document.addEventListener('keydown', onKey);
+
+      // Ресайз/ориентация
+      window.addEventListener('resize', resizeBoard);
+      window.addEventListener('orientationchange', ()=> setTimeout(resizeBoard, 50));
+
+      setStatus('Нажмите любую кнопку управления, чтобы начать игру.');
+      updateStartButton();
+    }
+    window.addEventListener('load', init);
+  </script>
+</body>
+</html>
