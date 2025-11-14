@@ -957,10 +957,13 @@ const LS_KEYS = {
   ruLineIndex: 'tt_ru_line_idx',  
   enNeuro: 'tt_en_neuro',       // '' | 'light' | 'hard'
   ruNeuro: 'tt_ru_neuro',       // '' | 'light' | 'hard'      // RU
+  enNeuroLine: '', // кэш текущей EN нейро-строки
+  ruNeuroLine: '', // кэш текущей RU нейро-строки
   customLines: 'tt_custom_lines',
   errorLimit: 'tt_error_limit',
   currentStreak: 'tt_current_streak',
   showAssistant: 'tt_show_assistant',
+  customLang: 'tt_custom_lang',
 };
 
 let state = {
@@ -977,6 +980,7 @@ ruNeuro: '',   // '' | 'light' | 'hard' (активно, когда mode === 'ru
   errorLimit: 3,
   currentStreak: 0,
   showAssistant: false,
+  customLang: 'en', // 'en' | 'ru'
 };
 
 // ===============================
@@ -1063,6 +1067,11 @@ async function init() {
     opt.textContent = String(i);
     errorLimitSelect.appendChild(opt);
   }
+
+  const opt999 = document.createElement('option');
+opt999.value = '999';
+opt999.textContent = '999';
+errorLimitSelect.appendChild(opt999);
 
   loadProgress();
 
@@ -1152,11 +1161,18 @@ function setMode(mode) {
   // Сброс позиции в начале новой сессии
   state.charIndex = 0;
   state.errorsInLine = 0;
-
+  if (mode === 'lesson') {
+    state.ruNeuro = '';
+    state.ruNeuroLine = ''; // сброс кэша RU нейро-строки
+  }
+  if (mode === 'ru') {
+    state.enNeuro = '';
+    state.enNeuroLine = ''; // сброс кэша EN нейро-строки
+  }
 
   // Сбрасываем нейро‑режим другого языка (чтобы не конфликтовал)
-  if (mode === 'lesson') state.ruNeuro = '';
-  if (mode === 'ru') state.enNeuro = '';
+  // if (mode === 'lesson') state.ruNeuro = '';
+  // if (mode === 'ru') state.enNeuro = '';
   // Применить UI, пересобрать клавиатуру и выпадающий список уроков
   updateModeUI();
   saveProgress();
@@ -1180,28 +1196,52 @@ function updateModeUI(initial = false) {
   customBox.style.display = state.mode === 'custom' ? 'block' : 'none';
 
   // Input lang + help текст
-  typingInput.setAttribute('lang', state.mode === 'ru' ? 'ru' : 'en');
-  helpAllowed.textContent = state.mode === 'ru'
+//   typingInput.setAttribute('lang', state.mode === 'ru' ? 'ru' : 'en');
+//   helpAllowed.textContent = state.mode === 'ru'
+//     ? 'Вводится только нижний регистр а-я, ё, цифры, пробел и базовая пунктуация.'
+//     : 'Вводится только нижний регистр a-z, цифры, пробел и базовая пунктуация.';
+
+//   // Наполнить список уроков подходящим массивом
+//   populateLessonSelect();
+
+//   // Выставить текущее значение select по прогрессу режима
+//   if (state.mode === 'ru') {
+//   lessonSelect.value = state.ruNeuro ? `neuro:${state.ruNeuro}` : String(state.ruLessonIndex);
+// } else {
+//   lessonSelect.value = state.enNeuro ? `neuro:${state.enNeuro}` : String(state.lessonIndex);
+// }
+
+//   // Пересобрать клавиатуру в нужной раскладке
+//   buildKeyboard(state.mode === 'ru' ? 'ru' : 'en');
+
+//   // Обновить ассистент видимость
+//   updateAssistantVisibility();
+
+//   if (!initial) updateKeyboardHints();
+
+const isRU = isRULayout();
+  typingInput.setAttribute('lang', isRU ? 'ru' : 'en');
+  helpAllowed.textContent = isRU
     ? 'Вводится только нижний регистр а-я, ё, цифры, пробел и базовая пунктуация.'
     : 'Вводится только нижний регистр a-z, цифры, пробел и базовая пунктуация.';
 
-  // Наполнить список уроков подходящим массивом
+  // Наполнить список уроков ...
   populateLessonSelect();
 
-  // Выставить текущее значение select по прогрессу режима
+  // Выставить значение select ...
   if (state.mode === 'ru') {
-  lessonSelect.value = state.ruNeuro ? `neuro:${state.ruNeuro}` : String(state.ruLessonIndex);
-} else {
-  lessonSelect.value = state.enNeuro ? `neuro:${state.enNeuro}` : String(state.lessonIndex);
-}
+    lessonSelect.value = state.ruNeuro ? `neuro:${state.ruNeuro}` : String(state.ruLessonIndex);
+  } else {
+    lessonSelect.value = state.enNeuro ? `neuro:${state.enNeuro}` : String(state.lessonIndex);
+  }
 
-  // Пересобрать клавиатуру в нужной раскладке
-  buildKeyboard(state.mode === 'ru' ? 'ru' : 'en');
+  // + Пересобрать клавиатуру с учетом customLang
+  buildKeyboard(isRU ? 'ru' : 'en');
 
-  // Обновить ассистент видимость
   updateAssistantVisibility();
-
   if (!initial) updateKeyboardHints();
+
+
 }
 
 function populateLessonSelect() {
@@ -1237,20 +1277,25 @@ function onLessonChange() {
   if (state.mode === 'ru') {
     if (isNeuro) {
       state.ruNeuro = (kind === 'hard') ? 'hard' : 'light';
+      state.ruNeuroLine = ''; // генерируем заново при первом рендере
     } else {
       state.ruNeuro = '';
       state.ruLessonIndex = Number(v) || 0;
       state.ruLineIndex = 0;
+      state.ruNeuroLine = ''; // очистить кэш
     }
   } else {
     if (isNeuro) {
       state.enNeuro = (kind === 'hard') ? 'hard' : 'light';
+      state.enNeuroLine = ''; // генерируем заново при первом рендере
     } else {
       state.enNeuro = '';
       state.lessonIndex = Number(v) || 0;
       state.lineIndex = 0;
+      state.enNeuroLine = ''; // очистить кэш
     }
   }
+
   state.charIndex = 0;
   state.errorsInLine = 0;
   saveProgress();
@@ -1264,14 +1309,16 @@ function resetProgress() {
   if (state.mode === 'ru') {
     state.ruLessonIndex = 0;
     state.ruLineIndex = 0;
+    state.ruNeuroLine = ''; // очистить кэш RU
   } else {
     state.lessonIndex = 0;
     state.lineIndex = 0;
+    state.enNeuroLine = ''; // очистить кэш EN
   }
+
   state.charIndex = 0;
   state.errorsInLine = 0;
   state.currentStreak = 0;
-
   saveProgress();
   lessonSelect.value = '0';
   flashMessage('Прогресс сброшен', 'warn');
@@ -1279,6 +1326,8 @@ function resetProgress() {
   render();
   ensureFocus();
 }
+
+
 
 function loadCustomText() {
   const text = (customText.value || '').replace(/\r/g, '');
@@ -1288,6 +1337,10 @@ function loadCustomText() {
     return;
   }
   state.customLines = lines;
+
+  // + автоопределить язык для "Свой текст"
+  state.customLang = detectCustomLang(text);
+
   state.lineIndex = 0;
   state.charIndex = 0;
   state.errorsInLine = 0;
@@ -1301,19 +1354,26 @@ function loadCustomText() {
 function getLinesForMode() {
   if (state.mode === 'lesson') {
     if (state.enNeuro) {
-      // Генерируем одну строку под выбранный нейро‑режим
-      return [generateNeuroLine('en', state.enNeuro)];
+      if (!state.enNeuroLine) {
+        state.enNeuroLine = generateNeuroLine('en', state.enNeuro);
+      }
+      return [state.enNeuroLine];
     }
     const lesson = curriculumEN[state.lessonIndex] || curriculumEN[0];
     return Array.isArray(lesson?.lines) ? lesson.lines : [];
   }
+
   if (state.mode === 'ru') {
     if (state.ruNeuro) {
-      return [generateNeuroLine('ru', state.ruNeuro)];
+      if (!state.ruNeuroLine) {
+        state.ruNeuroLine = generateNeuroLine('ru', state.ruNeuro);
+      }
+      return [state.ruNeuroLine];
     }
     const lesson = curriculumRU[state.ruLessonIndex] || curriculumRU[0];
     return Array.isArray(lesson?.lines) ? lesson.lines : [];
   }
+
   return state.customLines || [];
 }
 
@@ -1434,10 +1494,14 @@ function onLineCompleted() {
 
    // Нейро‑режим: перегенерируем следующую строку и остаёмся в этом же "уроке"
    if ((state.mode === 'lesson' && state.enNeuro) || (state.mode === 'ru' && state.ruNeuro)) {
-    state.charIndex = 0;
+    if (state.mode === 'lesson') {
+      state.enNeuroLine = ''; // сбросить, чтобы getLinesForMode сгенерировал новую
+    } else {
+      state.ruNeuroLine = ''; // сбросить, чтобы getLinesForMode сгенерировал новую
+    }
     state.errorsInLine = 0;
     saveProgress();
-    render();   // generateNeuroLine вызовется заново из getLinesForMode()
+    render();
     return;
   }
 
@@ -1530,8 +1594,9 @@ function registerError(displayCh) {
 }
 function onErrorLimitChange() {
   const v = Number(errorLimitSelect.value);
-  const clamped = clamp(Number.isFinite(v) ? v : 3, 0, 30);
-  state.errorLimit = clamped;
+  // было: const clamped = clamp(Number.isFinite(v) ? v : 3, 0, 30);
+  const normalized = normalizeErrorLimit(Number.isFinite(v) ? v : 3);
+  state.errorLimit = normalized;
   saveProgress();
   updateErrorLimitInfo();
   updateStats();
@@ -1546,16 +1611,49 @@ function updateErrorLimitInfo() {
 // ===============================
 function normalizeLine(s) { return (s || '').toLowerCase(); }
 
+
+// + автоопределение языка "Свой текст" по наличию кириллицы
+function detectCustomLang(text) {
+  return /[а-яё]/i.test(text) ? 'ru' : 'en';
+}
+
+// + вспомогательная: текущая раскладка для UI/валидации/клавиатуры
+function isRULayout() {
+  return state.mode === 'ru' || (state.mode === 'custom' && state.customLang === 'ru');
+}
+
+function normalizeErrorLimit(v) {
+  return v === 999 ? 999 : clamp(v, 0, 30);
+}
+
+// function toTrainerChar(key) {
+//   // Разрешённые символы зависят от режима
+//   if (key === ' ') return ' ';
+//   if (key.length === 1) {
+//     const ch = key.toLowerCase();
+//     if (state.mode === 'ru') {
+//       // RU: а-я, ё, цифры и базовая пунктуация
+//       if (/[а-яё0-9\.\,;\'\/\-\=\`]/i.test(ch)) return ch;
+//     } else {
+//       // EN/custom: a-z, цифры и базовая пунктуация
+//       if (/[a-z0-9\.\,;\'\/\-\=\`]/.test(ch)) return ch;
+//     }
+//   }
+//   return '';
+// }
+
+
 function toTrainerChar(key) {
-  // Разрешённые символы зависят от режима
   if (key === ' ') return ' ';
   if (key.length === 1) {
     const ch = key.toLowerCase();
-    if (state.mode === 'ru') {
+    // + выбор раскладки по текущему режиму/языку
+    const useRU = isRULayout();
+    if (useRU) {
       // RU: а-я, ё, цифры и базовая пунктуация
       if (/[а-яё0-9\.\,;\'\/\-\=\`]/i.test(ch)) return ch;
     } else {
-      // EN/custom: a-z, цифры и базовая пунктуация
+      // EN: a-z, цифры и базовая пунктуация
       if (/[a-z0-9\.\,;\'\/\-\=\`]/.test(ch)) return ch;
     }
   }
@@ -1570,6 +1668,31 @@ function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
 // ===============================
 // Сохранение/загрузка прогресса
 // ===============================
+// function saveProgress() {
+//   try {
+//     localStorage.setItem(LS_KEYS.mode, state.mode);
+//     localStorage.setItem(LS_KEYS.errorLimit, String(state.errorLimit));
+//     localStorage.setItem(LS_KEYS.currentStreak, String(state.currentStreak || 0));
+//     localStorage.setItem(LS_KEYS.showAssistant, state.showAssistant ? '1' : '0');
+
+//     // EN
+//     localStorage.setItem(LS_KEYS.lessonIndex, String(state.lessonIndex));
+//     localStorage.setItem(LS_KEYS.lineIndex, String(state.lineIndex));
+
+//     // RU
+//     localStorage.setItem(LS_KEYS.ruLessonIndex, String(state.ruLessonIndex));
+//     localStorage.setItem(LS_KEYS.ruLineIndex, String(state.ruLineIndex));
+
+//     localStorage.setItem(LS_KEYS.enNeuro, state.enNeuro || '');
+// localStorage.setItem(LS_KEYS.ruNeuro, state.ruNeuro || '');
+
+//     if (state.mode === 'custom' && state.customLines.length) {
+//       saveCustomToLS(state.customLines);
+//     }
+//   } catch {}
+// }
+
+// saveProgress()
 function saveProgress() {
   try {
     localStorage.setItem(LS_KEYS.mode, state.mode);
@@ -1584,22 +1707,62 @@ function saveProgress() {
     // RU
     localStorage.setItem(LS_KEYS.ruLessonIndex, String(state.ruLessonIndex));
     localStorage.setItem(LS_KEYS.ruLineIndex, String(state.ruLineIndex));
-
     localStorage.setItem(LS_KEYS.enNeuro, state.enNeuro || '');
-localStorage.setItem(LS_KEYS.ruNeuro, state.ruNeuro || '');
+    localStorage.setItem(LS_KEYS.ruNeuro, state.ruNeuro || '');
+
+    // + custom lang
+    localStorage.setItem(LS_KEYS.customLang, state.customLang || 'en');
 
     if (state.mode === 'custom' && state.customLines.length) {
       saveCustomToLS(state.customLines);
     }
   } catch {}
 }
+
+
+
+// function loadProgress() {
+//   try {
+//     const mode = localStorage.getItem(LS_KEYS.mode);
+//     if (mode === 'custom' || mode === 'lesson' || mode === 'ru') state.mode = mode;
+
+//     const errLimit = Number(localStorage.getItem(LS_KEYS.errorLimit));
+//     if (!Number.isNaN(errLimit)) state.errorLimit = normalizeErrorLimit(errLimit);
+
+//     const curStreak = Number(localStorage.getItem(LS_KEYS.currentStreak));
+//     if (!Number.isNaN(curStreak)) state.currentStreak = Math.max(0, curStreak);
+
+//     const showAssistantRaw = localStorage.getItem(LS_KEYS.showAssistant);
+//     state.showAssistant = showAssistantRaw === '1';
+
+//     // EN progress
+//     const lessonIndex = Number(localStorage.getItem(LS_KEYS.lessonIndex));
+//     const lineIndex = Number(localStorage.getItem(LS_KEYS.lineIndex));
+//     if (!Number.isNaN(lessonIndex)) state.lessonIndex = Math.max(0, lessonIndex);
+//     if (!Number.isNaN(lineIndex)) state.lineIndex = Math.max(0, lineIndex);
+
+//     // RU progress
+//     const ruLessonIndex = Number(localStorage.getItem(LS_KEYS.ruLessonIndex));
+//     const ruLineIndex = Number(localStorage.getItem(LS_KEYS.ruLineIndex));
+//     if (!Number.isNaN(ruLessonIndex)) state.ruLessonIndex = Math.max(0, ruLessonIndex);
+//     if (!Number.isNaN(ruLineIndex)) state.ruLineIndex = Math.max(0, ruLineIndex);
+//     const enNeuro = localStorage.getItem(LS_KEYS.enNeuro);
+// if (enNeuro === 'light' || enNeuro === 'hard' || enNeuro === '') state.enNeuro = enNeuro || '';
+// const ruNeuro = localStorage.getItem(LS_KEYS.ruNeuro);
+// if (ruNeuro === 'light' || ruNeuro === 'hard' || ruNeuro === '') state.ruNeuro = ruNeuro || '';
+
+//     state.customLines = loadCustomFromLS();
+//   } catch {}
+// }
+
+
 function loadProgress() {
   try {
     const mode = localStorage.getItem(LS_KEYS.mode);
     if (mode === 'custom' || mode === 'lesson' || mode === 'ru') state.mode = mode;
 
     const errLimit = Number(localStorage.getItem(LS_KEYS.errorLimit));
-    if (!Number.isNaN(errLimit)) state.errorLimit = clamp(errLimit, 0, 30);
+    if (!Number.isNaN(errLimit)) state.errorLimit = clamp(errLimit, 0, 30); // если уже добавили normalizeErrorLimit — используйте её
 
     const curStreak = Number(localStorage.getItem(LS_KEYS.currentStreak));
     if (!Number.isNaN(curStreak)) state.currentStreak = Math.max(0, curStreak);
@@ -1618,14 +1781,21 @@ function loadProgress() {
     const ruLineIndex = Number(localStorage.getItem(LS_KEYS.ruLineIndex));
     if (!Number.isNaN(ruLessonIndex)) state.ruLessonIndex = Math.max(0, ruLessonIndex);
     if (!Number.isNaN(ruLineIndex)) state.ruLineIndex = Math.max(0, ruLineIndex);
+
     const enNeuro = localStorage.getItem(LS_KEYS.enNeuro);
-if (enNeuro === 'light' || enNeuro === 'hard' || enNeuro === '') state.enNeuro = enNeuro || '';
-const ruNeuro = localStorage.getItem(LS_KEYS.ruNeuro);
-if (ruNeuro === 'light' || ruNeuro === 'hard' || ruNeuro === '') state.ruNeuro = ruNeuro || '';
+    if (enNeuro === 'light' || enNeuro === 'hard' || enNeuro === '') state.enNeuro = enNeuro || '';
+    const ruNeuro = localStorage.getItem(LS_KEYS.ruNeuro);
+    if (ruNeuro === 'light' || ruNeuro === 'hard' || ruNeuro === '') state.ruNeuro = ruNeuro || '';
 
     state.customLines = loadCustomFromLS();
+
+    // + загрузить язык "Свой текст" (по умолчанию 'en')
+    const cl = localStorage.getItem(LS_KEYS.customLang);
+    if (cl === 'ru' || cl === 'en') state.customLang = cl;
   } catch {}
 }
+
+
 function saveCustomToLS(lines) {
   try { localStorage.setItem(LS_KEYS.customLines, JSON.stringify(lines || [])); } catch {}
 }
@@ -1697,11 +1867,22 @@ function buildKeyboard(layout = 'en') {
   kbRows.appendChild(spaceRow);
 }
 
+// function getKeyElForChar(ch) {
+//   if (!kbEl || !ch) return null;
+//   const allowedEN = /^[a-z0-9 \.\,;\'\/\-\=\`]$/;
+//   const allowedRU = /^[а-яё0-9 \.\,;\'\/\-\=\`]$/i;
+//   const allowed = state.mode === 'ru' ? allowedRU : allowedEN;
+//   if (!allowed.test(ch)) return null;
+//   const selector = ch === ' ' ? '[data-key=" "]' : `[data-key="${cssEscape(ch)}"]`;
+//   return kbEl.querySelector(selector);
+// }
+
 function getKeyElForChar(ch) {
   if (!kbEl || !ch) return null;
   const allowedEN = /^[a-z0-9 \.\,;\'\/\-\=\`]$/;
   const allowedRU = /^[а-яё0-9 \.\,;\'\/\-\=\`]$/i;
-  const allowed = state.mode === 'ru' ? allowedRU : allowedEN;
+  // + выбирать по текущей раскладке, а не только по mode === 'ru'
+  const allowed = isRULayout() ? allowedRU : allowedEN;
   if (!allowed.test(ch)) return null;
   const selector = ch === ' ' ? '[data-key=" "]' : `[data-key="${cssEscape(ch)}"]`;
   return kbEl.querySelector(selector);
@@ -1777,14 +1958,21 @@ function updateHandsHighlightAtKey(code, keyEl) {
 }
 
 // Маппинг пальцев — EN/RU
+// function getFingerForChar(ch) {
+//   if (!ch) return '';
+//   if (ch === ' ') return 'thumbs';
+
+//   if (state.mode === 'ru') {
+//     return getFingerForCharRU(ch);
+//   }
+//   return getFingerForCharEN(ch);
+// }
+
 function getFingerForChar(ch) {
   if (!ch) return '';
   if (ch === ' ') return 'thumbs';
-
-  if (state.mode === 'ru') {
-    return getFingerForCharRU(ch);
-  }
-  return getFingerForCharEN(ch);
+  // + выбор набора по текущей раскладке
+  return isRULayout() ? getFingerForCharRU(ch) : getFingerForCharEN(ch);
 }
 
 function getFingerForCharEN(ch) {

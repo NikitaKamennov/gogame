@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Block Blast (мобильный drag&drop)</title>
+<style>
+:root{
+  --bg:#0f1216;
+  --panel:#151a21;
+  --text:#e5e7eb;
+  --muted:#9aa3af;
+  --accent:#60a5fa;
+  --ok:#22c55e;
+  --err:#ef4444;
+  --grid:#1f2937;
+  --cell:#111827;
+  --ghost:#8ab4f8;
+  --will:#22c55e;
+  --boom:#f59e0b;
+  --br:#242b35;
+  --shadow:0 10px 25px rgba(0,0,0,.35);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Ubuntu,Arial,"Noto Sans";-webkit-tap-highlight-color: transparent;}
+body{touch-action:none} /* критично для тача */
+
+.wrap{max-width:960px;margin:16px auto;padding:12px}
+.header{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:12px}
+.title{font-weight:800;font-size:20px}
+.hud{display:flex;gap:10px;flex-wrap:wrap;color:var(--muted)}
+.hud strong{color:var(--text)}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{
+  background:#111827;color:#fff;border:1px solid var(--br);
+  padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:600;
+}
+.btn.primary{background:#1f2937;border-color:#374151}
+.btn:hover{filter:brightness(1.06)}
+.btn[disabled]{opacity:.6;cursor:not-allowed}
+
+.panel{
+  background:var(--panel);border:1px solid var(--br);border-radius:14px;
+  box-shadow:var(--shadow);padding:12px;
+}
+
+.layout{display:grid;grid-template-columns:1fr;gap:12px}
+@media (min-width:820px){
+  .layout{grid-template-columns:1fr 320px}
+}
+
+/* Поле */
+.board-wrap{display:flex;justify-content:center}
+.board{
+  width:min(92vw, 520px);
+  aspect-ratio:1/1; /* квадрат */
+  display:grid;grid-template-columns:repeat(10, 1fr);
+  gap:4px; padding:8px;border-radius:12px;
+  background:#0e131a;border:1px solid var(--br);position:relative;
+}
+.cell{
+  background:var(--cell);
+  border:1px solid var(--grid);
+  border-radius:6px;
+  position:relative;
+  overflow:hidden;
+  transition:background-color .12s, transform .08s;
+}
+.cell.fill::after{
+  content:'';position:absolute;inset:0;border-radius:6px;
+  box-shadow: inset 0 5px 0 rgba(255,255,255,.08), inset 0 -5px 0 rgba(0,0,0,.22);
+}
+.cell.ghost{
+  outline:2px dashed rgba(138,180,248,.9);
+  outline-offset:-3px;
+  background:rgba(138,180,248,.18);
+}
+.cell.invalid{
+  outline:2px dashed rgba(239,68,68,.85);
+  outline-offset:-3px;background:rgba(239,68,68,.12);
+}
+.cell.will{
+  box-shadow:0 0 0 3px rgba(34,197,94,.35) inset, 0 0 16px rgba(34,197,94,.25);
+}
+.cell.boom{
+  animation:pop .18s ease-out;
+}
+@keyframes pop{
+  0%{transform:scale(1)}
+  40%{transform:scale(1.08)}
+  100%{transform:scale(1)}
+}
+
+/* Лоток фигур */
+.tray{
+  display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:10px;
+}
+.piece{
+  background:#0e131a;border:1px solid var(--br);border-radius:12px;padding:10px;
+  display:inline-block;position:relative;touch-action:none; /* важно для тача */
+}
+.pgrid{
+  display:grid;gap:4px;
+}
+.pcell{
+  width:28px;height:28px;border-radius:6px;background:var(--cell);border:1px solid var(--grid);
+}
+.pcell.fill{
+  position:relative;background:#334155;border-color:#3b4451;
+}
+.pcell.fill::after{
+  content:'';position:absolute;inset:0;border-radius:6px;
+  box-shadow: inset 0 4px 0 rgba(255,255,255,.1), inset 0 -4px 0 rgba(0,0,0,.22);
+}
+
+/* Призрак при перетаскивании */
+.dragGhost{
+  position:fixed;left:0;top:0;z-index:9999;pointer-events:none;
+  display:grid;gap:4px;
+  filter:drop-shadow(0 8px 16px rgba(0,0,0,.45));
+}
+.ghostCell{
+  width:32px;height:32px;border-radius:6px;
+  background:rgba(138,180,248,.9);
+  box-shadow: inset 0 4px 0 rgba(255,255,255,.15), inset 0 -4px 0 rgba(0,0,0,.25);
+}
+
+/* Цвета фигур */
+.fill.c1{ background:#60a5fa !important } /* голубой */
+.fill.c2{ background:#34d399 !important } /* зелёный */
+.fill.c3{ background:#f59e0b !important } /* янтарь */
+.fill.c4{ background:#f43f5e !important } /* розово-красный */
+.fill.c5{ background:#a78bfa !important } /* фиолетовый */
+.fill.c6{ background:#fb7185 !important } /* розовый */
+.fill.c7{ background:#22d3ee !important } /* бирюзовый */
+.fill.c8{ background:#fbbf24 !important } /* оранж-жёлтый */
+
+/* Подсказки/статус */
+.status{margin-top:8px;color:var(--muted);font-size:14px}
+.best{color:var(--accent);font-weight:700}
+
+/* Модалка */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:10000}
+.modal.open{display:flex}
+.modal-content{
+  width:90%;max-width:380px;background:var(--panel);border:1px solid var(--br);
+  border-radius:14px;box-shadow:var(--shadow);padding:16px;text-align:center;
+}
+.modal h3{margin:0 0 8px}
+.modal p{margin:0 0 12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="header">
+    <div class="title">Block Blast</div>
+    <div class="hud">
+      <div>Счёт: <strong id="score">0</strong></div>
+      <div>Лучший: <strong class="best" id="best">0</strong></div>
+      <div>Ходы: <strong id="moves">0</strong></div>
+    </div>
+    <div class="btns">
+      <button id="btnNew" class="btn primary">Новая игра</button>
+      <button id="btnUndo" class="btn">Отменить ход</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <div class="panel">
+      <div class="board-wrap">
+        <div id="board" class="board" aria-label="Поле 10 на 10"></div>
+      </div>
+      <div id="tray" class="tray" aria-label="Лоток фигур"></div>
+      <div id="status" class="status">Перетащите фигуру на поле. Подсветятся ряды/столбцы, которые взорвутся.</div>
+    </div>
+
+    <div class="panel">
+      <h3 style="margin:0 0 8px">Как играть</h3>
+      <ul style="margin:6px 0 0 18px;color:var(--muted);line-height:1.5">
+        <li>Перетаскивайте фигуры из лотка на поле (пальцем или мышью).</li>
+        <li>При наведении подсвечиваются заполненные ряды/столбцы — они взорвутся.</li>
+        <li>За вставку: +1 очко за клетку. За взрыв: +5 очков за клетку.</li>
+        <li>Когда закончились ходы — игра окончена.</li>
+        <li>Разработано по заказу <strong>Каменнова Максима </strong></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Модалка -->
+<div id="modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-content">
+    <h3 id="modalTitle">Нет ходов</h3>
+    <p id="modalText">Игра окончена. Ваш результат: 0</p>
+    <div style="display:flex;gap:8px;justify-content:center;margin-top:6px">
+      <button id="modalOk" class="btn primary">Новая игра</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =========================
+   Конфигурация / Состояние
+   ========================= */
+const SIZE = 10; // 10x10
+const STORAGE_BEST = 'blockblast_best_v1';
+
+let board = createEmptyBoard(); // 0 или строка класса цвета ('c1'..'c8')
+let score = 0;
+let best = Number(localStorage.getItem(STORAGE_BEST) || 0) || 0;
+let tray = []; // три фигуры [{cells:[{x,y}], w, h, color}]
+let grab = null; // инфо перетаскивания
+let undoStack = []; // одношаговый откат
+let movesLeft = 0;
+
+/* =========================
+   Фигуры
+   ========================= */
+const COLORS = ['c1','c2','c3','c4','c5','c6','c7','c8'];
+
+// Описание фигур — массив наборов относительных координат (нормализованы к (0,0))
+const SHAPES = [
+  // одиночки и линии
+  [[0,0]],
+  [[0,0],[1,0]], [[0,0],[1,0],[2,0]], [[0,0],[1,0],[2,0],[3,0]], [[0,0],[1,0],[2,0],[3,0],[4,0]],
+  [[0,0],[0,1]], [[0,0],[0,1],[0,2]], [[0,0],[0,1],[0,2],[0,3]], [[0,0],[0,1],[0,2],[0,3],[0,4]],
+  // квадраты
+  [[0,0],[1,0],[0,1],[1,1]],
+  // прямоугольники 3x2 и 2x3
+  [[0,0],[1,0],[2,0],[0,1],[1,1],[2,1]],
+  [[0,0],[0,1],[0,2],[1,0],[1,1],[1,2]],
+  // L‑образные
+  [[0,0],[0,1],[0,2],[1,2]],
+  [[0,0],[1,0],[2,0],[0,1]],
+  [[0,0],[1,0],[1,1],[1,2]],
+  [[0,0],[1,0],[2,0],[2,1]],
+  // T‑образные
+  [[0,0],[1,0],[2,0],[1,1]],
+  // Z/S‑образные
+  [[0,0],[1,0],[1,1],[2,1]],
+  [[1,0],[2,0],[0,1],[1,1]],
+  // крючки 3‑блочные
+  [[0,0],[0,1],[1,1]],
+  [[1,0],[0,1],[1,1]],
+];
+
+function shapeFromDef(def){
+  // нормализуем к (0,0)
+  let minx=Infinity,miny=Infinity;
+  for (const [x,y] of def){ if (x<minx) minx=x; if (y<miny) miny=y; }
+  const cells = def.map(([x,y]) => ({x:x-minx,y:y-miny}));
+  let w=0,h=0;
+  for (const c of cells){ if (c.x+1>w) w=c.x+1; if (c.y+1>h) h=c.y+1; }
+  return { cells, w, h, color: pick(COLORS) };
+}
+function randomPiece(){ return shapeFromDef(pick(SHAPES)); }
+
+/* =========================
+   DOM
+   ========================= */
+const boardEl = document.getElementById('board');
+const trayEl = document.getElementById('tray');
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const movesEl = document.getElementById('moves');
+const statusEl = document.getElementById('status');
+const btnNew = document.getElementById('btnNew');
+const btnUndo = document.getElementById('btnUndo');
+const modal = document.getElementById('modal');
+const modalTitle = document.getElementById('modalTitle');
+const modalText = document.getElementById('modalText');
+const modalOk = document.getElementById('modalOk');
+
+bestEl.textContent = String(best);
+
+
+/* =========================
+   Предзаполнение поля (добавить новый блок)
+   ========================= */
+   function prefillBoard(minRatio = 0.25, maxRatio = 0.35){
+  // Заполняем случайные клетки цветами. Цель — ощущение "заданного поля".
+  const ratio = minRatio + Math.random() * (maxRatio - minRatio);
+  const total = SIZE * SIZE;
+  const toFill = Math.floor(total * ratio);
+  let filled = 0;
+  while (filled < toFill){
+    const x = Math.floor(Math.random() * SIZE);
+    const y = Math.floor(Math.random() * SIZE);
+    if (!board[y][x]) {
+      board[y][x] = pick(COLORS);
+      filled++;
+    }
+  }
+}
+
+/* =========================
+   Инициализация
+   ========================= */
+   function wireUI(){
+  btnNew.addEventListener('click', newGame);
+  btnUndo.addEventListener('click', onUndo);
+  modalOk.addEventListener('click', () => { modal.classList.remove('open'); newGame(); });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  try {
+    buildBoardUI();
+    wireUI();
+    newGame(); // первая партия сразу
+    setStatus('Перетащите фигуру на поле. Подсветятся ряды/столбцы, которые взорвутся.');
+  } catch (e) {
+    console.error('Init error:', e);
+    setStatus('Ошибка инициализации. Откройте консоль.', true);
+  }
+});
+
+/* =========================
+   Логика игры
+   ========================= */
+   function newGame(){
+  board = createEmptyBoard();
+  score = 0;
+  undoStack = [];
+  tray = [randomPiece(), randomPiece(), randomPiece()];
+
+  // Новое: предзаполнение поля
+  prefillBoard(0.25, 0.35);
+
+  renderAll();
+  setStatus('Перетащите фигуру на поле.');
+  updateMovesLeft();
+}
+
+function onUndo(){
+  const st = undoStack.pop();
+  if (!st) return;
+  board = deepClone(st.board);
+  score = st.score;
+  tray = deepClone(st.tray);
+  renderAll();
+  setStatus('Ход отменён.');
+  updateMovesLeft();
+}
+
+function endGame(){
+  modalTitle.textContent = 'Нет ходов';
+  modalText.textContent = `Игра окончена. Ваш результат: ${score}.`;
+  modal.classList.add('open');
+}
+
+function updateMovesLeft(){
+  movesLeft = countAnyMoves(board, tray);
+  movesEl.textContent = String(movesLeft);
+  if (movesLeft === 0){
+    endGame();
+  }
+}
+
+/* =========================
+   Рендер
+   ========================= */
+let cellRefs = []; // [y][x] -> HTMLElement
+function buildBoardUI(){
+  boardEl.innerHTML = '';
+  cellRefs = Array.from({length: SIZE}, () => Array(SIZE).fill(null));
+  for (let y=0;y<SIZE;y++){
+    for (let x=0;x<SIZE;x++){
+      const d = document.createElement('div');
+      d.className = 'cell';
+      d.dataset.x = String(x);
+      d.dataset.y = String(y);
+      boardEl.appendChild(d);
+      cellRefs[y][x] = d;
+    }
+  }
+}
+
+function renderBoard(){
+  for (let y=0;y<SIZE;y++){
+    for (let x=0;x<SIZE;x++){
+      const el = cellRefs[y][x];
+      el.className = 'cell';
+      const v = board[y][x];
+      if (v){
+        el.classList.add('fill', v);
+      }
+    }
+  }
+}
+
+function renderTray(){
+  trayEl.innerHTML = '';
+  tray.forEach((p, idx) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'piece';
+    const grid = document.createElement('div');
+    grid.className = 'pgrid';
+    grid.style.gridTemplateColumns = `repeat(${p.w}, 1fr)`;
+    // вычислим set занятых
+    const set = new Set(p.cells.map(c => `${c.x},${c.y}`));
+    for (let yy=0; yy<p.h; yy++){
+      for (let xx=0; xx<p.w; xx++){
+        const cell = document.createElement('div');
+        cell.className = 'pcell' + (set.has(`${xx},${yy}`) ? ` fill ${p.color}` : '');
+        grid.appendChild(cell);
+      }
+    }
+    wrap.appendChild(grid);
+    wrap.addEventListener('pointerdown', (e) => startDrag(e, idx, wrap, p));
+    trayEl.appendChild(wrap);
+  });
+}
+
+function renderAll(){
+  renderBoard();
+  renderTray();
+  scoreEl.textContent = String(score);
+  bestEl.textContent = String(best);
+}
+
+/* =========================
+   Drag & Drop
+   ========================= */
+// function startDrag(e, pieceIndex, pieceEl, piece){
+//   e.preventDefault();
+//   pieceEl.setPointerCapture(e.pointerId);
+
+//   const boardRect = boardEl.getBoundingClientRect();
+//   const cellSize = boardRect.width / SIZE;
+//   // Определим, по какой ячейке фигуры схватили
+//   const gridEl = pieceEl.querySelector('.pgrid');
+//   const rect = gridEl.getBoundingClientRect();
+//   const gx = clamp(Math.floor((e.clientX - rect.left) / (rect.width / piece.w)), 0, piece.w-1);
+//   const gy = clamp(Math.floor((e.clientY - rect.top) / (rect.height / piece.h)), 0, piece.h-1);
+//   // Если схватили за пустую - найдём ближайшую заполненную (или возьмём 0,0)
+//   let grabCell = piece.cells.find(c => c.x === gx && c.y === gy);
+//   if (!grabCell) grabCell = piece.cells[0];
+
+//   // Создаём призрак
+//   const ghost = document.createElement('div');
+//   ghost.className = 'dragGhost';
+//   ghost.style.gridTemplateColumns = `repeat(${piece.w}, 1fr)`;
+//   // размер ячейки призрака = размер клетки на поле
+//   for (let yy=0; yy<piece.h; yy++){
+//     for (let xx=0; xx<piece.w; xx++){
+//       const g = document.createElement('div');
+//       g.className = 'ghostCell';
+//       g.style.width = g.style.height = `${cellSize - 0}px`;
+//       if (!piece.cells.some(c => c.x===xx && c.y===yy)) {
+//         g.style.opacity = '.18';
+//       } else {
+//         // цвет призрака чуть тонируем под цвет фигуры
+//         g.style.background = rgbaByClass(piece.color);
+//       }
+//       ghost.appendChild(g);
+//     }
+//   }
+//   document.body.appendChild(ghost);
+
+//   grab = {
+//     pointerId: e.pointerId,
+//     pieceIndex,
+//     piece: deepClone(piece),
+//     grabCx: grabCell.x,
+//     grabCy: grabCell.y,
+//     ghost,
+//     lastPos: null,
+//     valid: false,
+//     target: {x:0,y:0},
+//   };
+
+//   const onMove = (ev) => handleDragMove(ev);
+//   const onUp = (ev) => handleDragEnd(ev);
+
+//   window.addEventListener('pointermove', onMove);
+//   window.addEventListener('pointerup', onUp, { once: true });
+
+//   // начальный апдейт
+//   handleDragMove(e);
+
+//   function handleDragEnd(ev){
+//     window.removeEventListener('pointermove', onMove);
+//     pieceEl.releasePointerCapture(grab.pointerId);
+//     clearHighlights();
+
+//     const place = grab.valid ? commitPlacement(grab.piece, grab.target.x, grab.target.y) : false;
+
+//     // удаляем призрак
+//     if (grab.ghost && grab.ghost.parentNode) grab.ghost.parentNode.removeChild(grab.ghost);
+//     grab = null;
+
+//     if (place){
+//       // убираем фигуру из лотка
+//       tray.splice(pieceIndex, 1);
+//       // если лоток пуст — пополняем
+//       if (tray.length === 0){
+//         tray = [randomPiece(), randomPiece(), randomPiece()];
+//       }
+//       renderAll();
+//       updateMovesLeft();
+//     } else {
+//       setStatus('Невозможно разместить здесь.');
+//     }
+//   }
+// }
+
+
+function startDrag(e, pieceIndex, pieceEl, piece){
+  e.preventDefault();
+  pieceEl.setPointerCapture(e.pointerId);
+
+  const boardRect = boardEl.getBoundingClientRect();
+  const cellSize = boardRect.width / SIZE;
+  // Определим, по какой ячейке фигуры схватили
+  const gridEl = pieceEl.querySelector('.pgrid');
+  const rect = gridEl.getBoundingClientRect();
+  const gx = clamp(Math.floor((e.clientX - rect.left) / (rect.width / piece.w)), 0, piece.w-1);
+  const gy = clamp(Math.floor((e.clientY - rect.top) / (rect.height / piece.h)), 0, piece.h-1);
+  // Если схватили за пустую - найдём ближайшую заполненную (или возьмём 0,0)
+  let grabCell = piece.cells.find(c => c.x === gx && c.y === gy);
+  if (!grabCell) grabCell = piece.cells[0];
+
+  // Создаём призрак
+  const ghost = document.createElement('div');
+  ghost.className = 'dragGhost';
+  ghost.style.gridTemplateColumns = `repeat(${piece.w}, 1fr)`;
+  // размер ячейки призрака = размер клетки на поле
+  for (let yy=0; yy<piece.h; yy++){
+    for (let xx=0; xx<piece.w; xx++){
+      const g = document.createElement('div');
+      g.className = 'ghostCell';
+      g.style.width = g.style.height = `${cellSize - 0}px`;
+      if (!piece.cells.some(c => c.x===xx && c.y===yy)) {
+        g.style.opacity = '.18';
+      } else {
+        // цвет призрака чуть тонируем под цвет фигуры
+        g.style.background = rgbaByClass(piece.color);
+      }
+      ghost.appendChild(g);
+    }
+  }
+  document.body.appendChild(ghost);
+
+  grab = {
+    pointerId: e.pointerId,
+    pieceIndex,
+    piece: deepClone(piece),
+    grabCx: grabCell.x,
+    grabCy: grabCell.y,
+    ghost,
+    lastPos: null,
+    valid: false,
+    target: {x:0,y:0},
+  };
+
+  const onMove = (ev) => handleDragMove(ev);
+  const onUp = (ev) => handleDragEnd(ev);
+
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp, { once: true });
+
+  // начальный апдейт
+  handleDragMove(e);
+
+  function handleDragEnd(ev){
+    window.removeEventListener('pointermove', onMove);
+    pieceEl.releasePointerCapture(grab.pointerId);
+    clearHighlights();
+
+    const placed = grab.valid ? commitPlacement(grab.piece, grab.target.x, grab.target.y) : false;
+
+    // удаляем призрак
+    if (grab.ghost && grab.ghost.parentNode) grab.ghost.parentNode.removeChild(grab.ghost);
+    grab = null;
+
+    if (placed){
+      // убираем фигуру из лотка
+      tray.splice(pieceIndex, 1);
+      // если лоток пуст — пополняем
+      if (tray.length === 0){
+        tray = [randomPiece(), randomPiece(), randomPiece()];
+      }
+      // ВАЖНО: здесь НЕ вызываем updateMovesLeft — пересчёт произойдёт после очистки в commitPlacement
+      renderAll();
+      setStatus('Фигура установлена.');
+    } else {
+      setStatus('Невозможно разместить здесь.');
+    }
+  }
+}
+
+function handleDragMove(e){
+  if (!grab) return;
+
+  // Запомним позицию для корректного ресайза
+  if (typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+    grab.lastPos = { x: e.clientX, y: e.clientY };
+  }
+
+  const boardRect = boardEl.getBoundingClientRect();
+  const cellSize = boardRect.width / SIZE;
+
+  // центр курсора -> клетка под курсором
+  const cx = Math.floor((e.clientX - boardRect.left) / cellSize);
+  const cy = Math.floor((e.clientY - boardRect.top) / cellSize);
+
+  // якорь: верхний‑левый угол фигуры на поле
+  const topX = cx - grab.grabCx;
+  const topY = cy - grab.grabCy;
+
+  // позиционируем призрак к сетке (снап)
+  const px = boardRect.left + topX * cellSize;
+  const py = boardRect.top + topY * cellSize;
+  grab.ghost.style.left = `${px}px`;
+  grab.ghost.style.top = `${py}px`;
+
+  // подсветки
+  clearHighlights();
+  const { valid, willRows, willCols, cells } = checkPlacement(grab.piece, topX, topY);
+  grab.valid = valid;
+  grab.target = {x:topX, y:topY};
+
+  if (valid){
+    // ячейки фигуры
+    for (const c of cells){
+      const el = getCellEl(c.x, c.y);
+      if (el) el.classList.add('ghost');
+    }
+    // подсветка «взорвётся»
+    for (const ry of willRows){
+      for (let x=0;x<SIZE;x++){
+        getCellEl(x, ry)?.classList.add('will');
+      }
+    }
+    for (const cx of willCols){
+      for (let y=0;y<SIZE;y++){
+        getCellEl(cx, y)?.classList.add('will');
+      }
+    }
+    setStatus('Отпустите, чтобы поставить.');
+  } else {
+    // показываем ожидаемые клетки как invalid, если они в поле
+    for (const c of cells){
+      if (inside(c.x,c.y)){
+        getCellEl(c.x, c.y)?.classList.add('invalid');
+      }
+    }
+    setStatus('Сюда не влезает.');
+  }
+}
+
+function clearHighlights(){
+  for (let y=0;y<SIZE;y++){
+    for (let x=0;x<SIZE;x++){
+      const el = cellRefs[y][x];
+      el.classList.remove('ghost','invalid','will','boom');
+    }
+  }
+}
+
+/* =========================
+   Проверки и вставка
+   ========================= */
+function checkPlacement(piece, topX, topY){
+  const cells = piece.cells.map(c => ({x: topX + c.x, y: topY + c.y}));
+  // влезает ли
+  for (const c of cells){
+    if (!inside(c.x, c.y)) return { valid:false, willRows:[], willCols:[], cells };
+    if (board[c.y][c.x]) return { valid:false, willRows:[], willCols:[], cells };
+  }
+  // какие ряды/столбцы станут полными
+  const touchRows = new Set(cells.map(c => c.y));
+  const touchCols = new Set(cells.map(c => c.x));
+
+  // Временное заполнение для проверки
+  const willRows = [];
+  const willCols = [];
+
+  for (const ry of touchRows){
+    let full = true;
+    for (let x=0;x<SIZE;x++){
+      const taken = board[ry][x] || cells.some(c => c.x===x && c.y===ry);
+      if (!taken){ full = false; break; }
+    }
+    if (full) willRows.push(ry);
+  }
+  for (const cx of touchCols){
+    let full = true;
+    for (let y=0;y<SIZE;y++){
+      const taken = board[y][cx] || cells.some(c => c.x===cx && c.y===y);
+      if (!taken){ full = false; break; }
+    }
+    if (full) willCols.push(cx);
+  }
+
+  return { valid:true, willRows, willCols, cells };
+}
+
+// function commitPlacement(piece, topX, topY){
+//   const check = checkPlacement(piece, topX, topY);
+//   if (!check.valid) return false;
+
+//   // Сохраняем в undo
+//   undoStack = [{
+//     board: deepClone(board),
+//     score,
+//     tray: deepClone(tray)
+//   }];
+
+//   // Ставим фигуру
+//   for (const c of check.cells){
+//     board[c.y][c.x] = piece.color;
+//   }
+//   // Очки за вставку
+//   score += check.cells.length;
+
+//   // Определим взрывы
+//   const clearCells = new Set();
+//   for (const ry of check.willRows){
+//     for (let x=0;x<SIZE;x++) clearCells.add(`${x},${ry}`);
+//   }
+//   for (const cx of check.willCols){
+//     for (let y=0;y<SIZE;y++) clearCells.add(`${cx},${y}`);
+//   }
+
+//   // Анимация boom
+//   if (clearCells.size){
+//     for (const key of clearCells){
+//       const [x,y] = key.split(',').map(Number);
+//       const el = getCellEl(x,y);
+//       if (el) el.classList.add('boom');
+//     }
+//   }
+
+//   // Применяем очистку с задержкой небольшой для эффекта
+//   setTimeout(() => {
+//     if (clearCells.size){
+//       for (const key of clearCells){
+//         const [x,y] = key.split(',').map(Number);
+//         board[y][x] = 0;
+//       }
+//       // Очки за взрыв (усиленные)
+//       score += clearCells.size * 5;
+//       renderBoard();
+//     }
+//     // Обновляем счёт и бест
+//     if (score > best){ best = score; localStorage.setItem(STORAGE_BEST, String(best)); }
+// renderAll();
+// updateMovesLeft();
+//   }, 120);
+
+//   return true;
+// }
+
+
+function commitPlacement(piece, topX, topY){
+  const check = checkPlacement(piece, topX, topY);
+  if (!check.valid) return false;
+
+  // Сохраняем в undo
+  undoStack = [{
+    board: deepClone(board),
+    score,
+    tray: deepClone(tray)
+  }];
+
+  // Ставим фигуру
+  for (const c of check.cells){
+    board[c.y][c.x] = piece.color;
+  }
+  // Очки за вставку
+  score += check.cells.length;
+
+  // Определим взрывы
+  const clearCells = new Set();
+  for (const ry of check.willRows){
+    for (let x=0;x<SIZE;x++) clearCells.add(`${x},${ry}`);
+  }
+  for (const cx of check.willCols){
+    for (let y=0;y<SIZE;y++) clearCells.add(`${cx},${y}`);
+  }
+
+  // Анимация boom
+  if (clearCells.size){
+    for (const key of clearCells){
+      const [x,y] = key.split(',').map(Number);
+      const el = getCellEl(x,y);
+      if (el) el.classList.add('boom');
+    }
+  }
+
+  // Применяем очистку с небольшой задержкой для эффекта,
+  // и только ПОТОМ пересчитываем доступные ходы
+  setTimeout(() => {
+    if (clearCells.size){
+      for (const key of clearCells){
+        const [x,y] = key.split(',').map(Number);
+        board[y][x] = 0;
+      }
+      // Очки за взрыв (усиленные)
+      score += clearCells.size * 5;
+      renderBoard();
+    }
+    // Обновляем счёт и бест
+    if (score > best){ best = score; localStorage.setItem(STORAGE_BEST, String(best)); }
+    // Перерисуем всё (поле, лоток, HUD)
+    renderAll();
+    // КРИТИЧЕСКОЕ: пересчёт ходов — уже после очистки рядов/столбцов
+    updateMovesLeft();
+  }, 120);
+
+  return true;
+}
+
+/* =========================
+   Подсобные функции
+   ========================= */
+function createEmptyBoard(){
+  return Array.from({length: SIZE}, () => Array(SIZE).fill(0));
+}
+function inside(x,y){ return x>=0 && x<SIZE && y>=0 && y<SIZE; }
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
+function getCellEl(x,y){ return inside(x,y) ? cellRefs[y][x] : null; }
+function rgbaByClass(cls){
+  // Мягкое соответствие цветам для призрака
+  const map = {
+    c1: 'rgba(96,165,250,.9)',
+    c2: 'rgba(52,211,153,.9)',
+    c3: 'rgba(245,158,11,.9)',
+    c4: 'rgba(244,63,94,.9)',
+    c5: 'rgba(167,139,250,.9)',
+    c6: 'rgba(251,113,133,.9)',
+    c7: 'rgba(34,211,238,.9)',
+    c8: 'rgba(251,191,36,.9)',
+  };
+  return map[cls] || 'rgba(138,180,248,.9)';
+}
+function setStatus(msg){ statusEl.textContent = msg; }
+
+// Проверка наличия ходов для всего лотка
+function countAnyMoves(brd, pieces){
+  let count = 0;
+  for (let i=0;i<pieces.length;i++){
+    if (hasAnyPlacement(brd, pieces[i])) count++;
+  }
+  return count;
+}
+function hasAnyPlacement(brd, piece){
+  for (let y=0;y<SIZE;y++){
+    for (let x=0;x<SIZE;x++){
+      // быстрая проверка: все клетки фигуры должны быть пустыми и внутри
+      let ok = true;
+      for (const c of piece.cells){
+        const tx = x + c.x, ty = y + c.y;
+        if (!inside(tx,ty) || brd[ty][tx]){ ok=false; break; }
+      }
+      if (ok) return true;
+    }
+  }
+  return false;
+}
+
+/* =========================
+   События окна: ресайз
+   ========================= */
+// При ресайзе пересоздаём призрак, чтобы клетки совпадали по размеру
+window.addEventListener('resize', () => {
+  if (!grab || !grab.lastPos) return;
+  // Передадим суррогат объекта с clientX/Y
+  handleDragMove({ clientX: grab.lastPos.x, clientY: grab.lastPos.y });
+});
+</script>
+</body>
+</html>
