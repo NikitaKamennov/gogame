@@ -583,7 +583,12 @@ function startDrag(e, pieceIndex, pieceEl, piece){
       }
       // ВАЖНО: здесь НЕ вызываем updateMovesLeft — пересчёт произойдёт после очистки в commitPlacement
       renderAll();
-      setStatus('Фигура установлена.');
+setStatus('Фигура установлена.');
+
+// Пересчёт ходов — после очистки рядов (120мс в commitPlacement) и уже с новым лотком
+setTimeout(() => {
+  updateMovesLeft();
+}, 130);
     } else {
       setStatus('Невозможно разместить здесь.');
     }
@@ -807,7 +812,7 @@ function commitPlacement(piece, topX, topY){
     // Перерисуем всё (поле, лоток, HUD)
     renderAll();
     // КРИТИЧЕСКОЕ: пересчёт ходов — уже после очистки рядов/столбцов
-    updateMovesLeft();
+  
   }, 120);
 
   return true;
