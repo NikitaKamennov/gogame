@@ -146,6 +146,7 @@ background:#0e131a;border:1px solid var(--br);border-radius:10px;color:#fff;padd
 <select id="selDifficulty" class="select" aria-label="Выбор сложности">
 <option value="easy">Новичок</option>
 <option value="med">Бывалый</option>
+<option value="mae">Маэстро</option>
 </select>
 </div>
 <div class="row">
@@ -190,6 +191,11 @@ background:#0e131a;border:1px solid var(--br);border-radius:10px;color:#fff;padd
 1) Направления атак пешек в isSquareAttacked.
 2) Восстановление цвета съедённой фигуры в undoInternal.
 ========================= */
+
+let aiBusy = false;
+let maeCancel = false; // флаг отмены текущего поиска Маэстро
+
+
 function clone(obj){ return JSON.parse(JSON.stringify(obj)); }
 class LocalChess {
 constructor() {
@@ -782,7 +788,7 @@ const PIECE_UNICODE = {
 w: { k:'♔', q:'♕', r:'♖', b:'♗', n:'♘', p:'♙' },
 b: { k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟' },
 };
-const DIFF_LABEL = { easy:'Новичок', med:'Бывалый' };
+const DIFF_LABEL = { easy:'Новичок', med:'Бывалый', mae:'Маэстро' };
 let game;
 let playerSide = 'w';
 let difficulty = 'easy';
@@ -839,7 +845,7 @@ renderHUD();
 });
 btnResetStats.addEventListener('click', () => {
 if (confirm('Сбросить всю статистику по сложностям?')){
-score = { easy:{w:0,d:0,l:0}, med:{w:0,d:0,l:0} };
+score = { easy:{w:0,d:0,l:0}, med:{w:0,d:0,l:0}, mae:{w:0,d:0,l:0} };
 saveScore();
 renderHUD();
 }
@@ -940,6 +946,7 @@ el.classList.remove('mark-legal','mark-target','mark-last');
 }
 /* === DнD === */
 function startDrag(e, pieceEl, fromSq){
+   if (aiBusy) return; 
 if (game.isGameOver()) return;
 e.preventDefault();
 pieceEl.setPointerCapture(e.pointerId);
@@ -1054,20 +1061,24 @@ if (checkGameOver()) return;
 aiMoveWithDelay();
 }
 function aiMoveWithDelay(){
-setStatus('Ход компьютера…');
-const delay = (difficulty==='easy') ? 250 : 320;
-setTimeout(() => {
-const mv = computeAIMove();
-if (!mv){
-if (!checkGameOver()) endGameAsDraw('Нет ходов.');
-return;
-}
-game.move(mv);
-lastMove = { from: mv.from, to: mv.to };
-saveState();
-renderAll();
-checkGameOver();
-}, delay);
+  setStatus('Ход компьютера…');
+  if (difficulty === 'mae'){
+    aiMoveMaestro(); // асинхронный, сам завершит и продолжит UI
+    return;
+  }
+  const delay = (difficulty==='easy') ? 250 : 320;
+  setTimeout(() => {
+    const mv = computeAIMove();
+    if (!mv){
+      if (!checkGameOver()) endGameAsDraw('Нет ходов.');
+      return;
+    }
+    game.move(mv);
+    lastMove = { from: mv.from, to: mv.to };
+    saveState();
+    renderAll();
+    checkGameOver();
+  }, delay);
 }
 function computeAIMove(){
 if (difficulty === 'easy'){
@@ -1077,6 +1088,10 @@ return moves[Math.floor(Math.random()*moves.length)];
 }
 if (difficulty === 'med'){
 return pickBest1Ply();
+}
+if (difficulty === 'mae'){
+  // не используется здесь — ход посчитает aiMoveMaestro()
+  return null;
 }
 return null;
 }
@@ -1107,6 +1122,288 @@ score += (p.color===playerSide ? -val : val);
 }
 return score;
 }
+
+
+// ====== Маэстро (Negamax + Alpha-Beta + ID + TT + Quiescence) ======
+const MAE_CONF = {
+  // Бюджет времени и глубины. Можно скорректировать под устройство.
+  timeMs: isMobile() ? 4500 : 6000,
+  maxDepth: isMobile() ? 5 : 7,
+  movesPerTick: 1 // обрабатывать по 1 корневому ходу за тик (без фризов)
+};
+
+let TT = new Map(); // таблица транспозиций
+let KILLERS = [];   // killer moves по глубине
+let HISTORY = Object.create(null); // history heuristic
+function ttKey(){
+  // Ключ из первых 4 полей FEN (достаточно для позиции)
+  const f = game.fen().split(' ');
+  return f.slice(0,4).join(' ');
+}
+function moveKey(m){ return `${m.from}${m.to}${m.promotion||''}`; }
+function isCapture(m){ return (m.flags||'').includes('c'); }
+function isPromotion(m){ return !!m.promotion; }
+
+function orderMoves(moves, ttMove, depth){
+  const scores = [];
+  for (const m of moves){
+    let s = 0;
+    // 1) ТТ ход
+    if (ttMove && m.from===ttMove.from && m.to===ttMove.to && (m.promotion||'')===(ttMove.promotion||'')) s += 1e7;
+    // 2) Взятия: MVV-LVA
+    if (isCapture(m)){
+      const cap = pieceValues[m.captured||'p'] || 100;
+      const att = pieceValues[m.piece] || 100;
+      s += 5e6 + (cap*10 - att);
+    }
+    // 3) Killer
+    const kd = KILLERS[depth] || [];
+    if (kd && kd[0] && moveKey(m)===moveKey(kd[0])) s += 3e6;
+    if (kd && kd[1] && moveKey(m)===moveKey(kd[1])) s += 2e6;
+    // 4) History
+    s += (HISTORY[moveKey(m)] || 0);
+    // 5) Промоции чуть поощрим
+    if (isPromotion(m)) s += 1e5;
+    scores.push([s, m]);
+  }
+  scores.sort((a,b)=>b[0]-a[0]);
+  return scores.map(x=>x[1]);
+}
+
+const INF = 1e9;
+
+function qSearch(alpha, beta, maxColor){
+  // Stand pat
+  let stand = evalNegamax(maxColor);
+  if (stand >= beta) return beta;
+  if (stand > alpha) alpha = stand;
+  // Только взятия
+  const moves = game.moves({verbose:true}).filter(isCapture);
+  // Упорядочим только по MVV-LVA/History (TT в q обычно мало полезна)
+  const ordered = orderMoves(moves, null, 0);
+  for (const m of ordered){
+    const sim = { from:m.from, to:m.to }; if (m.promotion) sim.promotion = m.promotion;
+    game.move(sim);
+    const score = -qSearch(-beta, -alpha, maxColor);
+    game.undo();
+    if (score >= beta) return beta;
+    if (score > alpha) alpha = score;
+  }
+  return alpha;
+}
+
+function negamax(depth, alpha, beta, ply, maxColor){
+  const key = ttKey();
+  const tt = TT.get(key);
+  const alphaOrig = alpha;
+  if (tt && tt.depth >= depth){
+    if (tt.flag === 'EXACT') return tt.value;
+    else if (tt.flag === 'LOWER') alpha = Math.max(alpha, tt.value);
+    else if (tt.flag === 'UPPER') beta  = Math.min(beta, tt.value);
+    if (alpha >= beta) return tt.value;
+  }
+
+  if (depth <= 0){
+    return qSearch(alpha, beta, maxColor);
+  }
+
+  // Сгенерировать и упорядочить ходы
+  let moves = game.moves({verbose:true});
+  if (!moves.length){
+    // Мат/пат
+    if (game.inCheck(game.turn())) return -INF + ply; // чем быстрее мат, тем лучше
+    return 0;
+  }
+
+  if (!KILLERS[ply]) KILLERS[ply] = [null, null];
+  const ttMove = tt?.move || null;
+  moves = orderMoves(moves, ttMove, ply);
+
+  let bestVal = -INF;
+  let bestMove = null;
+  let searched = 0;
+
+  for (const m of moves){
+    const sim = { from:m.from, to:m.to }; if (m.promotion) sim.promotion = m.promotion;
+    game.move(sim);
+    const val = -negamax(depth-1, -beta, -alpha, ply+1, maxColor);
+    game.undo();
+    searched++;
+
+    if (val > bestVal){
+      bestVal = val; bestMove = m;
+      if (val > alpha){
+        alpha = val;
+        if (alpha >= beta){
+          // beta-cutoff: обновить killers/history для не-взятия
+          if (!isCapture(m)){
+            const mk = moveKey(m);
+            HISTORY[mk] = (HISTORY[mk] || 0) + depth*depth;
+            // записать как killer
+            if (!KILLERS[ply][0] || moveKey(KILLERS[ply][0])!==mk){
+              KILLERS[ply][1] = KILLERS[ply][0];
+              KILLERS[ply][0] = m;
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // Записать в TT
+  let flag = 'EXACT';
+  if (bestVal <= alphaOrig) flag = 'UPPER';
+  else if (bestVal >= beta) flag = 'LOWER';
+  TT.set(key, { depth, value: bestVal, flag, move: bestMove });
+
+  return bestVal;
+}
+
+function aiMoveMaestro(){
+  if (aiBusy) return;
+  aiBusy = true;
+  maeCancel = false;
+  setStatus('Маэстро просчитывает ход…');
+
+  // Инициализация структур
+  TT = new Map();
+  KILLERS = [];
+  HISTORY = Object.create(null);
+
+  const all = game.moves({verbose:true});
+  if (!all.length){
+    aiBusy = false;
+    if (!checkGameOver()) endGameAsDraw('Нет ходов.');
+    return;
+  }
+
+  // Стартовое упорядочивание (по взятиям/истории)
+  let depth = 1;
+  let bestMove = all[0];
+  let bestVal = -INF;
+
+  const state = {
+    start: Date.now(),
+    depth,
+    moves: orderMoves(all, null, 0),
+    idx: 0
+  };
+
+  const timer = setInterval(() => {
+    if (maeCancel){
+      clearInterval(timer);
+      aiBusy = false;
+      setStatus('Поиск остановлен.');
+      return;
+    }
+    const now = Date.now();
+    if (now - state.start >= MAE_CONF.timeMs){
+      // Время вышло — сделать лучший ход
+      clearInterval(timer);
+      aiBusy = false;
+      if (!bestMove){
+        if (!checkGameOver()) endGameAsDraw('Нет ходов.');
+        return;
+      }
+      game.move(bestMove);
+      lastMove = { from: bestMove.from, to: bestMove.to };
+      saveState();
+      renderAll();
+      checkGameOver();
+      return;
+    }
+
+    // Обработать movesPerTick корневых ходов текущей глубины
+    for (let k=0; k<MAE_CONF.movesPerTick; k++){
+      if (state.idx >= state.moves.length){
+        // Завершили текущую глубину — углубляемся
+        state.depth++;
+        if (state.depth > MAE_CONF.maxDepth){
+          clearInterval(timer);
+          aiBusy = false;
+          game.move(bestMove);
+          lastMove = { from: bestMove.from, to: bestMove.to };
+          saveState();
+          renderAll();
+          checkGameOver();
+          return;
+        }
+        // На следующую глубину переупорядочим корень, PV-ход (bestMove) первым
+        const rootMoves = game.moves({verbose:true});
+        let re = orderMoves(rootMoves, bestMove, 0);
+        // Продвинем лучший на позицию 0 явно
+        re = [bestMove, ...re.filter(m => !(m.from===bestMove.from && m.to===bestMove.to && (m.promotion||'')===(bestMove.promotion||'')))];
+        state.moves = re;
+        state.idx = 0;
+        break;
+      }
+
+      const m = state.moves[state.idx++];
+      const sim = { from:m.from, to:m.to }; if (m.promotion) sim.promotion = m.promotion;
+      game.move(sim);
+      const val = -negamax(state.depth-1, -INF, INF, 1, game.turn()==='w'?'b':'w'); // maxColor = цвет компьютера
+      game.undo();
+
+      if (val > bestVal){
+        bestVal = val;
+        bestMove = m;
+      }
+    }
+  }, 0);
+}
+
+
+
+
+
+
+
+
+
+
+
+function evaluateFor(color){
+  const b = game.board();
+  let score = 0;
+  for (let r=0;r<8;r++){
+    for (let c=0;c<8;c++){
+      const p = b[r][c];
+      if (!p) continue;
+      const base = pieceValues[p.type];
+      const idx = r*8 + c;
+      const pst = (p.color==='w'?PST_W:PST_B)[p.type][idx];
+      const val = base + pst;
+      score += (p.color===color ? val : -val);
+    }
+  }
+  // лёгкая мобильность: разница количества ходов
+  try {
+    const turnBackup = game.turn();
+    // Ходы для color:
+    const meMoves = (game.turn()===color) ? game.moves({verbose:true}).length : (() => {
+      game.turnColor = color; const n=game.moves({verbose:true}).length; game.turnColor = turnBackup; return n;
+    })();
+    // Ходы для opp:
+    const opp = (color==='w')?'b':'w';
+    const oppMoves = (game.turn()===opp) ? game.moves({verbose:true}).length : (() => {
+      game.turnColor = opp; const n=game.moves({verbose:true}).length; game.turnColor = turnBackup; return n;
+    })();
+    score += (meMoves - oppMoves) * 2; // небольшой вес мобильности
+  } catch {}
+  return score;
+}
+
+// Оценка для negamax: учитывает чей ход
+function evalNegamax(maxColor){
+  const s = evaluateFor(maxColor);
+  return (game.turn()===maxColor) ? s : -s;
+}
+
+
+
+
+
 function wouldGiveCheck(move){
 const mv = { from: move.from, to: move.to };
 if (move.promotion) mv.promotion = move.promotion;
@@ -1209,6 +1506,7 @@ if (game.turn() !== playerSide) aiMoveWithDelay();
 }
 function onUndo(){
 if (!game) return;
+maeCancel = true;
 game.undo();
 lastMove = null;
 saveState();
@@ -1216,6 +1514,7 @@ renderAll();
 setStatus('Ход(ы) отменён.');
 }
 function onSwitchSide(){
+   maeCancel = true;
 playerSide = (playerSide === 'w') ? 'b' : 'w';
 saveState();
 renderAll();
@@ -1243,7 +1542,7 @@ const st = JSON.parse(raw);
 if (st && st.fen){
 game.load(st.fen);
 playerSide = st.playerSide || 'w';
-difficulty = (st.difficulty==='med')?'med':'easy';
+difficulty = (['med','mae'].includes(st.difficulty)) ? st.difficulty : 'easy';
 lastMove = st.lastMove || null;
 } else {
 game.reset();
@@ -1256,11 +1555,14 @@ game.reset();
 }
 }
 function loadScore(){
-try{
-const s = JSON.parse(localStorage.getItem(LS_SCORE) || '{}');
-if (s && s.easy && s.med) return s;
-} catch {}
-return { easy:{w:0,d:0,l:0}, med:{w:0,d:0,l:0} };
+  try{
+    const s = JSON.parse(localStorage.getItem(LS_SCORE) || '{}');
+    if (s && s.easy && s.med){
+      if (!s.mae) s.mae = {w:0,d:0,l:0};
+      return s;
+    }
+  } catch {}
+  return { easy:{w:0,d:0,l:0}, med:{w:0,d:0,l:0}, mae:{w:0,d:0,l:0} };
 }
 function saveScore(){
 localStorage.setItem(LS_SCORE, JSON.stringify(score));
