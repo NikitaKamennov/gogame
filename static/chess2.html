@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Шахматы (локальный движок)</title>
+<title>Шахматы</title>
 <style>
 :root{
 --bg:#0f1216;
@@ -125,6 +125,10 @@ background:#0e131a;border:1px solid var(--br);border-radius:10px;color:#fff;padd
 <div>Вы: <strong id="hudSide">Белые</strong></div>
 <div>Ход: <strong id="hudTurn">Белые</strong></div>
 <div class="stat">Счёт (тек. сложн.): <strong id="hudScore">0/0/0</strong></div>
+<!-- Внутри .hud -->
+<div>Время белых: <strong id="hudTimeW">00:00</strong></div>
+<div>Время чёрных: <strong id="hudTimeB">00:00</strong></div>
+<div>Ходов: <strong id="hudMoves">1</strong></div>
 </div>
 <div class="btns">
 <button id="btnNew" class="btn primary">Новая игра</button>
@@ -195,6 +199,64 @@ background:#0e131a;border:1px solid var(--br);border-radius:10px;color:#fff;padd
 let aiBusy = false;
 let maeCancel = false; // флаг отмены текущего поиска Маэстро
 
+let timeMs = { w: 0, b: 0 }; // накопленное время сторон в мс
+let clockSide = null;        // чья сторона сейчас тикает
+let timeStartTs = null;      // момент старта текущего интервала
+let clockTimer = null;       // setInterval id
+
+
+
+function fmtTime(ms){
+  const total = Math.floor(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return String(m).padStart(2,'0') + ':' + String(s).padStart(2,'0');
+}
+function updateClockTick(){
+  if (!game) return;
+  let w = timeMs.w, b = timeMs.b;
+  if (timeStartTs != null && clockSide){
+    const el = Date.now() - timeStartTs;
+    if (clockSide === 'w') w += el; else b += el;
+  }
+  if (hudTimeW) hudTimeW.textContent = fmtTime(w);
+  if (hudTimeB) hudTimeB.textContent = fmtTime(b);
+  if (hudMoves) hudMoves.textContent = game.fullmove;
+}
+function clockStart(){
+  if (clockTimer) clearInterval(clockTimer);
+  clockSide = game.turn();      // у кого ход — у того и тикает
+  timeStartTs = Date.now();
+  clockTimer = setInterval(updateClockTick, 200);
+  updateClockTick();
+}
+function clockTurnChanged(){
+  // коммитим время предыдущей стороны и переключаемся на текущего игрока
+  if (timeStartTs != null && clockSide){
+    const el = Date.now() - timeStartTs;
+    timeMs[clockSide] += el;
+  }
+  clockSide = game.turn(); // после хода очередь уже у другой стороны
+  timeStartTs = Date.now();
+  updateClockTick();
+}
+function clockFinalize(){
+  // финализируем при окончании партии
+  if (timeStartTs != null && clockSide){
+    const el = Date.now() - timeStartTs;
+    timeMs[clockSide] += el;
+  }
+  clearInterval(clockTimer);
+  clockTimer = null;
+  timeStartTs = null;
+  updateClockTick();
+}
+function clockResetAfterUndo(){
+  // не меняем накопленное — просто переинициализируем старт
+  timeStartTs = Date.now();
+  clockSide = game.turn();
+  updateClockTick();
+}
 
 function clone(obj){ return JSON.parse(JSON.stringify(obj)); }
 class LocalChess {
@@ -815,6 +877,9 @@ const modalTitle = document.getElementById('modalTitle');
 const modalText = document.getElementById('modalText');
 const modalOk = document.getElementById('modalOk');
 const modalPromo = document.getElementById('modalPromo');
+const hudTimeW = document.getElementById('hudTimeW');
+const hudTimeB = document.getElementById('hudTimeB');
+const hudMoves = document.getElementById('hudMoves');
 document.addEventListener('DOMContentLoaded', () => {
 buildBoardUI();
 wireUI();
@@ -830,6 +895,7 @@ function initGameLocal(){
 game = new LocalChess();
 restoreOrNew();
 renderAll();
+clockStart();
 setStatus('Готово. Ваш ход.');
 if (game.turn() !== playerSide) aiMoveWithDelay();
 }
@@ -892,12 +958,14 @@ function renderHUD(){
 hudDifficulty.textContent = DIFF_LABEL[difficulty];
 hudSide.textContent = (playerSide==='w'?'Белые':'Чёрные');
 hudTurn.textContent = (game.turn()==='w'?'Белые':'Чёрные');
+
 const s = score[difficulty] || {w:0,d:0,l:0};
 stWins.textContent = s.w;
 stDraws.textContent = s.d;
 stLosses.textContent = s.l;
 hudScore.textContent = `${s.w}/${s.d}/${s.l}`;
 selDifficulty.value = difficulty;
+updateClockTick();
 }
 function renderBoard(){
 clearBoardMarks();
@@ -1054,6 +1122,7 @@ return;
 }
 lastMove = { from: move.from, to: move.to };
 setStatus('Ваш ход выполнен.');
+clockTurnChanged();
 saveState();
 renderAll();
 // Завершение если король снят будет обработано в checkGameOver()
@@ -1075,6 +1144,7 @@ function aiMoveWithDelay(){
     }
     game.move(mv);
     lastMove = { from: mv.from, to: mv.to };
+    clockTurnChanged();
     saveState();
     renderAll();
     checkGameOver();
@@ -1308,6 +1378,7 @@ function aiMoveMaestro(){
       }
       game.move(bestMove);
       lastMove = { from: bestMove.from, to: bestMove.to };
+      clockTurnChanged();
       saveState();
       renderAll();
       checkGameOver();
@@ -1324,6 +1395,7 @@ function aiMoveMaestro(){
           aiBusy = false;
           game.move(bestMove);
           lastMove = { from: bestMove.from, to: bestMove.to };
+          clockTurnChanged();
           saveState();
           renderAll();
           checkGameOver();
@@ -1447,6 +1519,7 @@ const blackKing = game.findKing('b');
 if (!whiteKing || !blackKing){
 const winner = whiteKing ? 'w' : 'b';
 const playerWon = (winner === playerSide);
+clockFinalize();
 updateScore(playerWon ? 'w' : 'l');
 showResultModal(playerWon ? 'Король соперника захвачен. Вы победили.' : 'Ваш король захвачен. Вы проиграли.');
 return true;
@@ -1473,6 +1546,7 @@ result = 'd';
 text = 'Ничья.';
 result = 'd';
 }
+clockFinalize();
 updateScore(result);
 showResultModal(text);
 return true;
@@ -1502,6 +1576,9 @@ pendingPromotion = null;
 setStatus('Новая партия. Ваш ход.');
 saveState();
 renderAll();
+timeMs = { w:0, b:0 };
+if (clockTimer){ clearInterval(clockTimer); clockTimer = null; }
+clockStart();
 if (game.turn() !== playerSide) aiMoveWithDelay();
 }
 function onUndo(){
@@ -1511,6 +1588,7 @@ game.undo();
 lastMove = null;
 saveState();
 renderAll();
+clockResetAfterUndo();
 setStatus('Ход(ы) отменён.');
 }
 function onSwitchSide(){
