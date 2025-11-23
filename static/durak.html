@@ -2,10 +2,11 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Подкидной дурак — 36 карт</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Подкидной дурак</title>
 <style>
 :root{
+  /* Цвета и базовые размеры */
   --bg:#0f1216;
   --panel:#151a21;
   --text:#e5e7eb;
@@ -18,82 +19,194 @@
   --shadow:0 10px 25px rgba(0,0,0,.35);
   --btn:#111827;
   --btn2:#1f2937;
-
+  /* Вьюпортная высота для мобильных (обновляется JS) */
+  --vh: 1vh;
+  /* Базовый размер карт (может переопределяться локально у руки игрока) */
   --card-w: 82px;
   --card-h: 120px;
   --card-r: 10px;
+  /* Гап у руки игрока (для расчёта fit) */
+  --hand-gap: 8px;
+  /* Мини-карта (для бейджа ИИ) */
+  --mini-w: 44px;
+  --mini-h: 64px;
 }
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,Segoe UI,Roboto,Ubuntu,Arial,"Noto Sans";-webkit-tap-highlight-color: transparent;}
-.wrap{max-width:1100px;margin:16px auto;padding:12px}
-.header{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:12px}
-.title{font-weight:800;font-size:20px}
-.hud{display:flex;gap:12px;flex-wrap:wrap;color:var(--muted)}
-.hud strong{color:var(--text)}
-.btns{display:flex;gap:8px;flex-wrap:wrap}
+
+/* Общие стили */
+*{ box-sizing:border-box; touch-action: manipulation; }
+html,body{
+  margin:0; padding:0; background:var(--bg); color:var(--text);
+  font-family:Inter,system-ui,Segoe UI,Roboto,Ubuntu,Arial,"Noto Sans";
+  -webkit-tap-highlight-color: transparent;
+  height: 100%;
+  overscroll-behavior: none;
+  overflow-x: hidden; /* запрещаем горизонтальную прокрутку страницы */
+}
+.wrap{
+  max-width:1100px; margin:0 auto; padding:12px;
+  /* стабильная высота под мобильные */
+  min-height: calc(var(--vh) * 100);
+  min-height: 100svh;
+  min-height: 100dvh;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  /* безопасные поля по бокам (iOS вырезы) */
+  padding-left: calc(12px + env(safe-area-inset-left, 0px));
+  padding-right: calc(12px + env(safe-area-inset-right, 0px));
+}
+
+/* Заголовок/ HUD */
+.header{
+  display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:wrap;
+  margin-bottom:8px;
+}
+.title{ font-weight:800; font-size:18px }
+.hud{ display:flex; gap:10px; flex-wrap:wrap; color:var(--muted); font-size:13px }
+.hud strong{ color:var(--text) }
+
+/* Кнопки */
+.btns{ display:flex; gap:8px; flex-wrap:wrap }
 .btn{
-  background:var(--btn);color:#fff;border:1px solid var(--br);
-  padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:600;
+  background:var(--btn); color:#fff; border:1px solid var(--br);
+  padding:12px 14px; border-radius:12px; cursor:pointer; font-weight:700;
+  min-height:44px;
+  font-size:15px;
+  min-width: 0;           /* позволяет сжиматься внутри flex-контейнеров */
+  white-space: normal;    /* разрешаем перенос текста на мобилках */
+  line-height: 1.2;
 }
-.btn.primary{background:var(--btn2);border-color:#374151}
-.btn:hover{filter:brightness(1.06)}
-.btn[disabled]{opacity:.6;cursor:not-allowed}
+.btn.primary{ background:var(--btn2); border-color:#374151 }
+.btn:hover{ filter:brightness(1.06) }
+.btn[disabled]{ opacity:.6; cursor:not-allowed }
+
+/* Авто-скрытие неактуальных кнопок на мобиле */
+@media (max-width:700px){
+  .btn.auto-hide[disabled]{ display:none !important }
+  .btn.auto-grow{ flex:1 1 auto }
+}
+
+/* Панели/разметка */
 .panel{
-  background:var(--panel);border:1px solid var(--br);border-radius:14px;
-  box-shadow:var(--shadow);padding:12px;
+  background:var(--panel); border:1px solid var(--br); border-radius:14px; box-shadow:var(--shadow); padding:10px;
+}
+.layout{
+  display:grid; grid-template-columns:1fr; gap:8px;
 }
 
-.layout{display:grid;grid-template-columns:1fr;gap:12px}
-@media (min-width:980px){
-  .layout{grid-template-columns:1fr 320px}
+/* Мобильный главный столбец игры: верх (колода/козырь/ИИ), стол (растягивается), действия, рука */
+.game{
+  display:grid;
+  grid-template-rows: auto auto auto auto;
+  gap:8px;
+  min-height: calc(var(--vh) * 100 - 24px);
+  min-height: calc(100svh - 24px);
+  min-height: calc(100dvh - 24px);
+  overflow: hidden;   /* страхуемся от случайных переполнений внутри игры */
+  width: 100%;
+  max-width: 100%;
 }
 
-.top-area, .bottom-area{display:flex;align-items:center;justify-content:space-between;gap:10px}
+/* Вершина: колода/козырь/ИИ */
+.top-bar{
+  display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+}
+
+/* Колода/козырь + ИИ */
+.deck-cluster{
+  display:flex; align-items:center; gap:10px; flex-wrap:wrap;
+}
+.deck-area, .discard-area{
+  display:flex; align-items:center; gap:8px;
+}
+.counter{ color:var(--muted); font-size:13px }
+
+/* Бейджи */
+.badge{
+  display:inline-flex; align-items:center; gap:6px; background:#0e141c; border:1px solid var(--br); border-radius:999px; padding:6px 10px; color:#cbd5e1;
+  font-size:12px;
+}
+.badge .dot{ width:10px; height:10px; border-radius:50% }
+.dot.trump{ background:#22c55e }
+.dot.attack{ background:#60a5fa }
+.dot.def{ background:#f59e0b }
+
+/* ИИ мини-инфо */
+.ai-info{
+  display:flex; align-items:center; gap:6px;
+}
+.card.mini{
+  width: var(--mini-w); height: var(--mini-h);
+  border-radius: 8px;
+}
+
+/* Зона стола — фиксируем высоту и делаем адаптивную сетку */
 .zone{
-  background:#0d131a;border:1px dashed #273040;border-radius:12px;padding:10px;min-height:140px;
+  background:#0d131a; border:1px dashed #273040; border-radius:12px; padding:8px;
+  overflow: hidden;     /* важно: обрезаем содержимое по радиусу, чтобы ничего не «срезалось» за правым краем */
 }
-.top-area .hand{justify-content:center}
-.bottom-area .hand{justify-content:center}
-
-/* Рука */
-.hand{
-  display:flex;gap:10px;flex-wrap:wrap;align-items:center;
-  min-height: var(--card-h);
-}
-
-/* Стол */
 .table{
   position:relative;
-  min-height: calc(var(--card-h) * 1.4);
+  height: calc(var(--card-h) * 1.5) !important;
+  min-height: calc(var(--card-h) * 1.5) !important;
+  width: 100%;
+  max-width: 100%;
   display:grid;
   grid-template-columns: repeat(6, minmax(var(--card-w), 1fr));
   grid-auto-rows: calc(var(--card-h) + 16px);
-  gap: 12px;
+  gap: 8px;
   justify-content:center;
+  box-sizing: border-box;
 }
+@media (max-width:700px){
+  .table{
+    grid-template-columns: repeat(4, minmax(40px, 1fr));
+    grid-auto-rows: calc(var(--card-h) + 12px);
+    gap: 6px;
+  }
+}
+
+/* ВАЖНО: ячейка стола больше не навязывает фиксированные размеры */
 .pile{
   position:relative;
-  width: var(--card-w);
-  height: var(--card-h);
+  width: 100%;     /* подстраиваемся под ширину колонки сетки */
 }
+
+/* Смещение покрывающей карты в процентах, чтобы масштабировалось вместе с карточкой */
 .pile .cover{
-  position:absolute; left: 16px; top: 18px;
+  position:absolute;
+  left: 20%;
+  top: 15%;
 }
 
-/* Колода и сброс */
-.deck-area, .discard-area{
-  display:flex; align-items:center; gap:10px;
+/* Рука игрока — один ряд, при избытке карт: авто-скейл + горизонтальная прокрутка */
+.hand{
+  display:flex; align-items:center; gap: var(--hand-gap);
+  height: calc(var(--card-h) + 8px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
 }
-.counter{color:var(--muted);font-size:13px}
-.badge{
-  display:inline-flex;align-items:center;gap:6px;background:#0e141c;border:1px solid var(--br);border-radius:999px;padding:6px 10px;color:#cbd5e1
-}
-.badge .dot{width:10px;height:10px;border-radius:50%}
-.dot.trump{background:#22c55e}
-.dot.attack{background:#60a5fa}
-.dot.def{background:#f59e0b}
 
-/* Карта */
+/* Ваша рука: грид с авто-вписыванием */
+#playerHandZone{
+  display: grid !important;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--hand-gap);
+  height: auto !important;
+  white-space: normal !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: auto;
+}
+
+/* Карточка в руке заполняет ячейку и сохраняет пропорции */
+#playerHandZone .card{
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 82 / 120;
+}
+
+/* Карта (базовая) */
 .card{
   width: var(--card-w); height: var(--card-h);
   background:linear-gradient(#f8fafc,#e5e7eb); color:#0b0f15;
@@ -102,7 +215,16 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
   position:relative; user-select:none;
   display:flex; flex-direction:column; justify-content:space-between;
   padding:8px;
+  will-change: transform;
 }
+
+/* ВАЖНО: карты на столе — адаптивные, чтобы не выталкивать сетку вправо */
+.table .card{
+  width: 100% !important;
+  height: auto !important;
+  aspect-ratio: 82 / 120;
+}
+
 .card.red{ color:#a0162f }
 .card .rank{ font-weight:800; font-size:18px }
 .card .suit{ font-size:18px }
@@ -120,131 +242,162 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:
   filter: drop-shadow(0 12px 24px rgba(0,0,0,.6));
 }
 
+/* отключаем нативные жесты скролла при DnD на картах */
+.draggable{ touch-action: none; }
+
 /* Дроп-зоны и подсветка */
-.drop-attack{
-  outline:2px dashed rgba(96,165,250,.75); outline-offset: -6px; border-radius:12px;
+.drop-attack{ outline:2px dashed rgba(96,165,250,.75); outline-offset: -6px; border-radius:12px }
+.drop-def{ outline:2px dashed rgba(245,158,11,.8); outline-offset: -6px; border-radius:10px }
+
+/* Хинт/статус — однострочно, чтоб не прыгал макет */
+.hint{ color:var(--muted); font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+.status{ margin-top:6px; color:var(--muted); font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+
+/* Панель действий — липкая к низу safe-area */
+.actions{
+  display:flex; gap:8px; align-items:center; justify-content:space-between; flex-wrap:nowrap;
+  position: sticky; bottom: 0; z-index: 5;
+  background: transparent; padding-bottom: env(safe-area-inset-bottom, 0px);
+  width: 100%; max-width: 100%;
 }
-.drop-def{
-  outline:2px dashed rgba(245,158,11,.8); outline-offset: -6px; border-radius:10px;
+@media (max-width:700px){
+  .actions{
+    display:flex; gap:10px; align-items:center; justify-content:center; /* центрируем кнопки на мобиле */
+    flex-wrap: wrap;
+    position: sticky; bottom: 0; z-index: 5;
+    background: transparent; padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .actions .btn{
+    flex: 1 1 100%;         /* каждая кнопка — на всю строку, без переполнения по ширине */
+    max-width: 100%;
+    min-width: 0;
+    font-size:16px; padding:14px 16px; min-height:48px;
+    text-align: center;
+  }
 }
-.hint{ color:var(--muted); font-size:14px }
-.status{margin-top:8px;color:var(--muted);font-size:14px}
 
 /* Модалка */
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:10000;padding:12px}
-.modal.open{display:flex}
+.modal{ position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:10000; padding:12px }
+.modal.open{ display:flex }
 .modal-content{
-  width:100%;max-width:420px;background:var(--panel);border:1px solid var(--br);
-  border-radius:14px;box-shadow:var(--shadow);padding:16px;text-align:center;
+  width:100%; max-width:420px; background:var(--panel); border:1px solid var(--br);
+  border-radius:14px; box-shadow:var(--shadow); padding:16px; text-align:center;
 }
-.modal h3{margin:0 0 8px}
-.modal p{margin:0 0 12px;color:var(--muted)}
+.modal h3{ margin:0 0 8px }
+.modal p{ margin:0 0 12px; color:var(--muted) }
 
-/* Адаптив */
+/* Адаптивные переключения блоков для AI */
 @media (max-width:700px){
+  #aiHandZone{ display:none }
+}
+@media (min-width:701px){
+  /* .ai-info{ display:none } */
+}
+
+/* Доп. адаптив базовых карт (если нужно чуть меньше на телефоне) */
+@media (max-width:500px){
   :root{ --card-w:72px; --card-h:104px }
 }
-@media (max-width:500px){
-  :root{ --card-w:64px; --card-h:96px }
-}
+
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="header">
-    <div class="title">Подкидной дурак (36)</div>
-    <div class="hud">
-      <div>Сложность: <strong id="hudDifficulty">Совсем дурак</strong></div>
-      <div>Кто атакует: <strong id="hudAttacker">Вы</strong></div>
-      <div>Козырь: <strong id="hudTrump">♠</strong></div>
-      <div class="badge"><span class="dot attack"></span> Атака</div>
-      <div class="badge"><span class="dot def"></span> Защита</div>
-    </div>
-    <div class="btns">
-      <button id="btnNew" class="btn primary">Новая игра</button>
-      <button id="btnSwitch" class="btn">Сменить первого</button>
-    </div>
-  </div>
+<div class="header">
 
-  <div class="layout">
-    <div class="panel">
-      <div class="top-area">
-        <div class="deck-area">
-          <div class="card back" id="deckTop" aria-label="Колода"></div>
-          <div class="card" id="trumpCard" aria-label="Козырь"></div>
-          <div class="counter">В колоде: <strong id="deckCount">36</strong></div>
-        </div>
-        <div class="zone hand" id="aiHandZone" aria-label="Рука соперника"></div>
-        <div class="discard-area">
-          <div class="card back" id="discardTop" aria-label="Сброс"></div>
-          <div class="counter">В сбросе: <strong id="discardCount">0</strong></div>
-        </div>
-      </div>
 
-      <div class="zone" style="margin-top:12px">
-        <div id="tableZone" class="table" aria-label="Стол"></div>
-        <div class="hint" id="tableHint" style="margin-top:8px">Перетащите карту на стол для атаки или на атакующую карту для защиты.</div>
-      </div>
-
-      <div class="bottom-area" style="margin-top:12px">
-        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button id="btnAiDefend" class="btn">Соперник защищается</button>
-          <button id="btnEndAttack" class="btn">Завершить атаку</button>
-          <button id="btnTake" class="btn">Взять карты</button>
-        </div>
-        <div class="zone hand" id="playerHandZone" aria-label="Ваша рука"></div>
-      </div>
-
-      <div id="status" class="status">Готово. Ваш ход.</div>
-    </div>
-
-    <div class="panel">
-      <h3 style="margin:0 0 8px">Параметры</h3>
-      <div class="row" style="display:flex;gap:10px;align-items:center;margin:6px 0">
-        <span class="label" style="color:var(--muted);font-size:14px">Сложность:</span>
-        <select id="selDifficulty" class="btn" style="padding:8px 10px">
-          <option value="easy">Совсем дурак</option>
-          <option value="med">Бывалый</option>
-          <option value="hard">Сверхмозг</option>
-        </select>
-      </div>
-      <div class="row" style="display:flex;gap:12px;align-items:center;margin:6px 0;flex-wrap:wrap">
-        <span class="label" style="color:var(--muted);font-size:14px">Статистика (по сложности):</span>
-        <div class="badge">Побед: <strong id="stWins" style="margin-left:6px">0</strong></div>
-        <div class="badge">Ничьих: <strong id="stDraws" style="margin-left:6px">0</strong></div>
-        <div class="badge">Поражений: <strong id="stLosses" style="margin-left:6px">0</strong></div>
-      </div>
-      <div class="row" style="display:flex;gap:10px;align-items:center;margin:6px 0">
-        <button id="btnResetStats" class="btn">Сбросить статистику</button>
-      </div>
-      <div class="row" style="display:flex;gap:10px;align-items:center;margin:6px 0">
-        <div class="badge"><span class="dot trump"></span> Текущий козырь внизу колоды</div>
-      </div>
-    </div>
-  </div>
+<div class="btns">
+<button id="btnNew" class="btn primary">Новая игра</button>
+<button id="btnSwitch" class="btn">Сменить первого</button>
 </div>
-
+</div>
+<div class="layout">
+<div class="panel game">
+<!-- Верхняя информация: колода + козырь + ИИ бейдж + сброс -->
+<div class="top-bar">
+<div class="deck-cluster">
+<div class="deck-area">
+<div class="card back" id="deckTop" aria-label="Колода"></div>
+<div class="" id="trumpCard" aria-label="Козырь"></div>
+<div class="counter">В колоде: <strong id="deckCount">36</strong></div>
+</div>
+<!-- Мини-информация по ИИ (на мобиле основное представление) -->
+<div class="ai-info" aria-label="Карты соперника">
+<div class="card back mini" aria-hidden="true"></div>
+<div class="counter">ИИ: <strong id="aiCount">6</strong></div>
+</div>
+</div>
+<div class="discard-area">
+<div class="card back" id="discardTop" aria-label="Сброс"></div>
+<div class="counter">В сбросе: <strong id="discardCount">0</strong></div>
+</div>
+</div>
+<!-- Рука ИИ для широких экранов (на мобиле скрывается) -->
+<div class="zone hand" id="aiHandZone" aria-label="Рука соперника"></div>
+<!-- Стол -->
+<div class="zone">
+<div id="tableZone" class="table" aria-label="Стол"></div>
+<div class="hint" id="tableHint" style="margin-top:6px">Перетащите карту на стол для атаки или на атакующую карту для защиты.</div>
+</div>
+<!-- Действия (липкая панель) -->
+<div class="actions" aria-label="Действия">
+<button id="btnAiDefend" class="btn auto-hide auto-grow">Соперник защищается</button>
+<button id="btnEndAttack" class="btn auto-hide auto-grow">Завершить атаку</button>
+<button id="btnTake" class="btn auto-hide auto-grow">Взять карты</button>
+</div>
+<!-- Рука игрока (один ряд, масштабируемая, с горизонтальной прокруткой при избытке карт) -->
+<div class="zone hand" id="playerHandZone" aria-label="Ваша рука"></div>
+<div id="status" class="status">Готово. Ваш ход.</div>
+</div>
+<div class="panel">
+<h3 style="margin:0 0 8px">Параметры</h3>
+<div class="row" style="display:flex;gap:10px;align-items:center;margin:6px 0">
+<span class="label" style="color:var(--muted);font-size:14px">Сложность:</span>
+<select id="selDifficulty" class="btn" style="padding:8px 10px">
+<option value="easy">Совсем дурак</option>
+<option value="med">Бывалый</option>
+<option value="hard">Сверхмозг</option>
+</select>
+</div>
+<div class="row" style="display:flex;gap:12px;align-items:center;margin:6px 0;flex-wrap:wrap">
+<span class="label" style="color:var(--muted);font-size:14px">Статистика (по сложности):</span>
+<div class="badge">Побед: <strong id="stWins" style="margin-left:6px">0</strong></div>
+<div class="badge">Ничьих: <strong id="stDraws" style="margin-left:6px">0</strong></div>
+<div class="badge">Поражений: <strong id="stLosses" style="margin-left:6px">0</strong></div>
+</div>
+<div class="row" style="display:flex;gap:10px;align-items:center;margin:6px 0">
+<button id="btnResetStats" class="btn">Сбросить статистику</button>
+</div>
+<div class="row" style="display:flex;gap:10px;align-items:center;margin:6px 0">
+<div class="badge"><span class="dot trump"></span> Текущий козырь внизу колоды</div>
+</div>
+</div>
+</div>
+<div class="hud">
+   <div>Сложность: <strong id="hudDifficulty">Совсем дурак</strong></div>
+   <div>Кто атакует: <strong id="hudAttacker">Вы</strong></div>
+   <div>Козырь: <strong id="hudTrump">♠</strong></div>
+   <div class="badge"><span class="dot attack"></span> Атака</div>
+   <div class="badge"><span class="dot def"></span> Защита</div>
+   </div>
+</div>
 <!-- Модалка результата -->
 <div id="modalGame" class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-  <div class="modal-content">
-    <h3 id="modalTitle">Игра окончена</h3>
-    <p id="modalText">Результат: —</p>
-    <div style="display:flex;gap:8px;justify-content:center;margin-top:6px">
-      <button id="modalOk" class="btn primary">Новая игра</button>
-    </div>
-  </div>
+<div class="modal-content">
+<h3 id="modalTitle">Игра окончена</h3>
+<p id="modalText">Результат: —</p>
+<div style="display:flex;gap:8px;justify-content:center;margin-top:6px">
+<button id="modalOk" class="btn primary">Новая игра</button>
 </div>
-
+</div>
+</div>
 <script>
 /* =========================
-Подкидной дурак (36), 1 на 1
-- колода 36, козырь
-- атака/защита/подкидка, лимиты
-- добор: сначала атакующий, затем защитник
-- 3 уровня ИИ
-- DnD, подсветка
+Подкидной дурак (36), 1 на 1 — мобильная адаптация
+- Адаптив: стаб. высота, крупные кнопки, скрытие неактуальных
+- Рука ИИ: на мобиле — одна рубашка + счетчик
+- Рука игрока: один ряд, динамический масштаб карт по количеству, горизонтальная прокрутка при избытке
 ========================= */
-
 const DIFF_LABEL = { easy:'Совсем дурак', med:'Бывалый', hard:'Сверхмозг' };
 const SUITS = ['C','D','H','S']; // ♣ ♦ ♥ ♠
 const SUIT_SYMBOL = { C:'♣', D:'♦', H:'♥', S:'♠' };
@@ -252,826 +405,692 @@ const RANKS = [6,7,8,9,10,11,12,13,14];
 const RANK_LABEL = { 6:'6',7:'7',8:'8',9:'9',10:'10',11:'В',12:'Д',13:'К',14:'Т' };
 const LS_STATE = 'durak_state_v1';
 const LS_SCORE = 'durak_score_v1';
-
 let game;
 let difficulty = 'easy';
 let score = loadScore();
-
 let dragging = null;
-
+let aiThinking = false;
 const el = {
-  deckTop: document.getElementById('deckTop'),
-  trumpCard: document.getElementById('trumpCard'),
-  deckCount: document.getElementById('deckCount'),
-  discardTop: document.getElementById('discardTop'),
-  discardCount: document.getElementById('discardCount'),
-  aiHand: document.getElementById('aiHandZone'),
-  playerHand: document.getElementById('playerHandZone'),
-  table: document.getElementById('tableZone'),
-  tableHint: document.getElementById('tableHint'),
-  btnAiDefend: document.getElementById('btnAiDefend'),
-  btnEndAttack: document.getElementById('btnEndAttack'),
-  btnTake: document.getElementById('btnTake'),
-  btnNew: document.getElementById('btnNew'),
-  btnSwitch: document.getElementById('btnSwitch'),
-  selDifficulty: document.getElementById('selDifficulty'),
-  status: document.getElementById('status'),
-  hudDifficulty: document.getElementById('hudDifficulty'),
-  hudAttacker: document.getElementById('hudAttacker'),
-  hudTrump: document.getElementById('hudTrump'),
-  stWins: document.getElementById('stWins'),
-  stDraws: document.getElementById('stDraws'),
-  stLosses: document.getElementById('stLosses'),
-  btnResetStats: document.getElementById('btnResetStats'),
-  modalGame: document.getElementById('modalGame'),
-  modalTitle: document.getElementById('modalTitle'),
-  modalText: document.getElementById('modalText'),
-  modalOk: document.getElementById('modalOk'),
+deckTop: document.getElementById('deckTop'),
+trumpCard: document.getElementById('trumpCard'),
+deckCount: document.getElementById('deckCount'),
+discardTop: document.getElementById('discardTop'),
+discardCount: document.getElementById('discardCount'),
+aiHand: document.getElementById('aiHandZone'),
+aiCount: document.getElementById('aiCount'),
+playerHand: document.getElementById('playerHandZone'),
+table: document.getElementById('tableZone'),
+tableHint: document.getElementById('tableHint'),
+btnAiDefend: document.getElementById('btnAiDefend'),
+btnEndAttack: document.getElementById('btnEndAttack'),
+btnTake: document.getElementById('btnTake'),
+btnNew: document.getElementById('btnNew'),
+btnSwitch: document.getElementById('btnSwitch'),
+selDifficulty: document.getElementById('selDifficulty'),
+status: document.getElementById('status'),
+hudDifficulty: document.getElementById('hudDifficulty'),
+hudAttacker: document.getElementById('hudAttacker'),
+hudTrump: document.getElementById('hudTrump'),
+stWins: document.getElementById('stWins'),
+stDraws: document.getElementById('stDraws'),
+stLosses: document.getElementById('stLosses'),
+btnResetStats: document.getElementById('btnResetStats'),
+modalGame: document.getElementById('modalGame'),
+modalTitle: document.getElementById('modalTitle'),
+modalText: document.getElementById('modalText'),
+modalOk: document.getElementById('modalOk'),
 };
-
 class Game {
-  constructor(){
-    this.newGame('human');
-  }
-  newGame(first){
-    this.deck = [];
-    for (const s of SUITS){
-      for (const r of RANKS){
-        this.deck.push({suit:s, rank:r, id: s + r});
-      }
-    }
-    shuffle(this.deck);
-
-    // Выбираем козырь — последняя добираемая
-    this.trumpCard = this.deck.pop(); // нижняя открытая
-    this.trump = this.trumpCard.suit; // масть козыря
-    // Оставшаяся колода — закрытая стопка (top = конец массива)
-    // Никаких карт не в сбросе и не на столе
-    this.discard = [];
-    this.table = []; // [{a:Card, d?:Card}]
-    this.hands = { human:[], ai:[] };
-
-    // Раздача по 6 (первым — атакующий после определения первого хода)
-    this.attacker = first === 'ai' ? 'ai' : 'human';
-    this.defender = this.attacker === 'human' ? 'ai' : 'human';
-
-    // Раздаем по очереди: по стандарту порядок раздачи не критичен
-    for (let i=0;i<6;i++){
-      this.hands.human.push(this.draw());
-      this.hands.ai.push(this.draw());
-    }
-    sortHand(this.hands.human, this.trump);
-    sortHand(this.hands.ai, this.trump);
-
-    this.awaitingAiDefense = false; // флаг «ждем, чтобы ИИ защитился»
-    this.lastBoutTook = null; // кто брал в прошлой взятке (для отладочного статуса)
-
-    this.history = []; // при желании можно хранить стек
-  }
-  cardsLeftInStock(){
-    return this.deck.length + (this.trumpCard ? 1 : 0);
-  }
-  draw(){
-    if (this.deck.length>0){
-      return this.deck.pop();
-    }
-    if (this.trumpCard){
-      const t = this.trumpCard; this.trumpCard = null; return t;
-    }
-    return null;
-  }
-  // Правила
-  beats(card, target){
-    if (!card || !target) return false;
-    if (card.suit === target.suit) return card.rank > target.rank;
-    if (card.suit === this.trump && target.suit !== this.trump) return true;
-    return false;
-  }
-  allowedAttackRanks(){
-    const set = new Set();
-    for (const p of this.table){
-      set.add(p.a.rank);
-      if (p.d) set.add(p.d.rank);
-    }
-    return set;
-  }
-  maxAttackCardsThisBout(){
-    const defHand = this.hands[this.defender];
-    return Math.min(6, defHand.length);
-  }
-  currentAttackCount(){ return this.table.length; }
-  uncoveredCount(){ return this.table.filter(p=>!p.d).length; }
-
-  canAttackWith(card){
-    const limit = this.maxAttackCardsThisBout();
-    if (this.table.length >= limit) return false;
-    if (this.table.length === 0) return true;
-    const ranks = this.allowedAttackRanks();
-    return ranks.has(card.rank);
-  }
-  canDefendWith(idx, card){
-    if (idx<0 || idx>=this.table.length) return false;
-    if (this.table[idx].d) return false;
-    const target = this.table[idx].a;
-    return this.beats(card, target);
-  }
-
-  attackPlay(card, side){
-    if (side !== this.attacker) return false;
-    if (!this.canAttackWith(card)) return false;
-    // удалить из руки
-    removeFromHand(this.hands[side], card.id);
-    // добавить на стол
-    this.table.push({ a: card });
-    return true;
-  }
-  defendPlay(idx, card, side){
-    if (side !== this.defender) return false;
-    if (!this.canDefendWith(idx, card)) return false;
-    removeFromHand(this.hands[side], card.id);
-    this.table[idx].d = card;
-    return true;
-  }
-
-  endAttack(){
-    // Можно завершить атаку только если все покрыто
-    if (this.uncoveredCount() !== 0) return false;
-    // Все карты на столе в сброс
-    for (const p of this.table){
-      this.discard.push(p.a);
-      if (p.d) this.discard.push(p.d);
-    }
-    this.table = [];
-    // Меняем роли
-    const prevAtt = this.attacker;
-    this.attacker = this.defender;
-    this.defender = prevAtt;
-    this.lastBoutTook = null;
-
-    // Добор до 6: первым — текущий атакующий
-    this.refill();
-    return true;
-  }
-  takeAll(side){
-    if (side !== this.defender) return false;
-    // Защитник берет все карты
-    for (const p of this.table){
-      this.hands[side].push(p.a);
-      if (p.d) this.hands[side].push(p.d);
-    }
-    this.table = [];
-    sortHand(this.hands[side], this.trump);
-    // Ход сохраняется за прежним атакующим
-    this.lastBoutTook = side;
-    // Добор до 6: первым — атакующий (тот же), затем защитник (который брал)
-    this.refill();
-    return true;
-  }
-  refill(){
-    // Порядок добора: атакующий, затем защитник, до 6
-    for (const who of [this.attacker, this.defender]){
-      while (this.hands[who].length < 6){
-        const card = this.draw();
-        if (!card) break;
-        this.hands[who].push(card);
-      }
-      sortHand(this.hands[who], this.trump);
-    }
-  }
-
-  isBoutEmpty(){ return this.table.length===0; }
-
-  // Окончание игры: проверяется ПОСЛЕ завершения взятки (сброс/взятие и добор)
-  checkEnd(){
-    const stockEmpty = this.cardsLeftInStock()===0;
-    if (!stockEmpty) return null;
-    const h = this.hands.human.length;
-    const a = this.hands.ai.length;
-    if (h===0 && a===0) return 'draw';
-    if (h===0 && a>0) return 'human';
-    if (a===0 && h>0) return 'ai';
-    return null;
-  }
-
-  serialize(){
-    return JSON.stringify({
-      deck: this.deck.map(c=>c.id),
-      trumpCard: this.trumpCard ? this.trumpCard.id : null,
-      trump: this.trump,
-      discard: this.discard.map(c=>c.id),
-      table: this.table.map(p => ({ a:p.a.id, d: p.d ? p.d.id : null })),
-      hands: {
-        human: this.hands.human.map(c=>c.id),
-        ai: this.hands.ai.map(c=>c.id)
-      },
-      attacker: this.attacker,
-      defender: this.defender,
-      lastBoutTook: this.lastBoutTook
-    });
-  }
-  static fromSerialized(str){
-    const data = JSON.parse(str);
-    const g = new Game();
-    // build by id
-    function cardById(id){ if (!id) return null; const [s, ...rest] = id.split(''); return { suit:s, rank:parseInt(rest.join(''),10), id }; }
-    g.deck = data.deck.map(cardById);
-    g.trumpCard = cardById(data.trumpCard);
-    g.trump = data.trump;
-    g.discard = data.discard.map(cardById);
-    g.table = data.table.map(p => ({ a: cardById(p.a), d: p.d ? cardById(p.d) : null }));
-    g.hands = { human: data.hands.human.map(cardById), ai: data.hands.ai.map(cardById) };
-    g.attacker = data.attacker;
-    g.defender = data.defender;
-    g.lastBoutTook = data.lastBoutTook || null;
-    return g;
-  }
+constructor(){ this.newGame('human'); }
+newGame(first){
+this.deck = [];
+for (const s of SUITS){ for (const r of RANKS){ this.deck.push({suit:s, rank:r, id: s + r}); } }
+shuffle(this.deck);
+this.trumpCard = this.deck.pop();
+this.trump = this.trumpCard.suit;
+this.discard = [];
+this.table = [];
+this.hands = { human:[], ai:[] };
+this.attacker = first === 'ai' ? 'ai' : 'human';
+this.defender = this.attacker === 'human' ? 'ai' : 'human';
+for (let i=0;i<6;i++){ this.hands.human.push(this.draw()); this.hands.ai.push(this.draw()); }
+sortHand(this.hands.human, this.trump);
+sortHand(this.hands.ai, this.trump);
+this.lastBoutTook = null;
+this.history = [];
 }
-
+cardsLeftInStock(){ return this.deck.length + (this.trumpCard ? 1 : 0); }
+draw(){
+if (this.deck.length>0) return this.deck.pop();
+if (this.trumpCard){ const t = this.trumpCard; this.trumpCard = null; return t; }
+return null;
+}
+beats(card, target){
+if (!card || !target) return false;
+if (card.suit === target.suit) return card.rank > target.rank;
+if (card.suit === this.trump && target.suit !== this.trump) return true;
+return false;
+}
+allowedAttackRanks(){
+const set = new Set();
+for (const p of this.table){ set.add(p.a.rank); if (p.d) set.add(p.d.rank); }
+return set;
+}
+maxAttackCardsThisBout(){
+const defHand = this.hands[this.defender];
+return Math.min(6, defHand.length);
+}
+currentAttackCount(){ return this.table.length; }
+uncoveredCount(){ return this.table.filter(p=>!p.d).length; }
+canAttackWith(card){
+const limit = this.maxAttackCardsThisBout();
+if (this.table.length >= limit) return false;
+if (this.table.length === 0) return true;
+const ranks = this.allowedAttackRanks();
+return ranks.has(card.rank);
+}
+canDefendWith(idx, card){
+if (idx<0 || idx>=this.table.length) return false;
+if (this.table[idx].d) return false;
+const target = this.table[idx].a;
+return this.beats(card, target);
+}
+attackPlay(card, side){
+if (side !== this.attacker) return false;
+if (!this.canAttackWith(card)) return false;
+removeFromHand(this.hands[side], card.id);
+this.table.push({ a: card });
+return true;
+}
+defendPlay(idx, card, side){
+if (side !== this.defender) return false;
+if (!this.canDefendWith(idx, card)) return false;
+removeFromHand(this.hands[side], card.id);
+this.table[idx].d = card;
+return true;
+}
+endAttack(){
+if (this.uncoveredCount() !== 0) return false;
+for (const p of this.table){ this.discard.push(p.a); if (p.d) this.discard.push(p.d); }
+this.table = [];
+const prevAtt = this.attacker;
+this.attacker = this.defender;
+this.defender = prevAtt;
+this.lastBoutTook = null;
+this.refill();
+return true;
+}
+takeAll(side){
+if (side !== this.defender) return false;
+for (const p of this.table){ this.hands[side].push(p.a); if (p.d) this.hands[side].push(p.d); }
+this.table = [];
+sortHand(this.hands[side], this.trump);
+this.lastBoutTook = side;
+this.refill();
+return true;
+}
+refill(){
+for (const who of [this.attacker, this.defender]){
+while (this.hands[who].length < 6){
+const card = this.draw(); if (!card) break;
+this.hands[who].push(card);
+}
+sortHand(this.hands[who], this.trump);
+}
+}
+isBoutEmpty(){ return this.table.length===0; }
+checkEnd(){
+const stockEmpty = this.cardsLeftInStock()===0;
+if (!stockEmpty) return null;
+const h = this.hands.human.length;
+const a = this.hands.ai.length;
+if (h===0 && a===0) return 'draw';
+if (h===0 && a>0) return 'human';
+if (a===0 && h>0) return 'ai';
+return null;
+}
+serialize(){
+return JSON.stringify({
+deck: this.deck.map(c=>c.id),
+trumpCard: this.trumpCard ? this.trumpCard.id : null,
+trump: this.trump,
+discard: this.discard.map(c=>c.id),
+table: this.table.map(p => ({ a:p.a.id, d: p.d ? p.d.id : null })),
+hands: { human: this.hands.human.map(c=>c.id), ai: this.hands.ai.map(c=>c.id) },
+attacker: this.attacker,
+defender: this.defender,
+lastBoutTook: this.lastBoutTook
+});
+}
+static fromSerialized(str){
+const data = JSON.parse(str);
+const g = new Game();
+function cardById(id){ if (!id) return null; const [s, ...rest] = id.split(''); return { suit:s, rank:parseInt(rest.join(''),10), id }; }
+g.deck = data.deck.map(cardById);
+g.trumpCard = cardById(data.trumpCard);
+g.trump = data.trump;
+g.discard = data.discard.map(cardById);
+g.table = data.table.map(p => ({ a: cardById(p.a), d: p.d ? cardById(p.d) : null }));
+g.hands = { human: data.hands.human.map(cardById), ai: data.hands.ai.map(cardById) };
+g.attacker = data.attacker;
+g.defender = data.defender;
+g.lastBoutTook = data.lastBoutTook || null;
+return g;
+}
+}
 /* ==== Утилиты ==== */
-function shuffle(a){
-  for (let i=a.length-1;i>0;i--){
-    const j = Math.floor(Math.random()*(i+1));
-    [a[i],a[j]] = [a[j],a[i]];
-  }
-}
+function shuffle(a){ for (let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; } }
 function sortHand(hand, trump){
-  hand.sort((c1,c2)=>{
-    const t1 = c1.suit===trump, t2 = c2.suit===trump;
-    if (t1!==t2) return t1?1:-1; // не-козыри раньше
-    if (c1.suit!==c2.suit) return suitOrder(c1.suit) - suitOrder(c2.suit);
-    return c1.rank - c2.rank;
-  });
+hand.sort((c1,c2)=>{
+const t1 = c1.suit===trump, t2 = c2.suit===trump;
+if (t1!==t2) return t1?1:-1;
+if (c1.suit!==c2.suit) return suitOrder(c1.suit) - suitOrder(c2.suit);
+return c1.rank - c2.rank;
+});
 }
 function suitOrder(s){ return ({C:0,D:1,H:2,S:3})[s]; }
-function removeFromHand(hand, id){
-  const i = hand.findIndex(c=>c.id===id);
-  if (i>=0) hand.splice(i,1);
-}
+function removeFromHand(hand, id){ const i = hand.findIndex(c=>c.id===id); if (i>=0) hand.splice(i,1); }
 function cardEl(card, faceUp=true){
-  const div = document.createElement('div');
-  div.className = 'card' + (faceUp ? '' : ' back');
-  if (faceUp){
-    const red = (card.suit==='H' || card.suit==='D');
-    if (red) div.classList.add('red');
-    const tl = document.createElement('div'); tl.className='corner top';
-    const br = document.createElement('div'); br.className='corner bottom';
-    const rank = document.createElement('div'); rank.className='rank'; rank.textContent = RANK_LABEL[card.rank];
-    const suit = document.createElement('div'); suit.className='suit'; suit.textContent = SUIT_SYMBOL[card.suit];
-    const rank2 = rank.cloneNode(true);
-    const suit2 = suit.cloneNode(true);
-    tl.appendChild(rank); tl.appendChild(suit);
-    br.appendChild(rank2); br.appendChild(suit2);
-    const big = document.createElement('div'); big.className='big'; big.textContent = SUIT_SYMBOL[card.suit];
-
-    div.appendChild(tl);
-    div.appendChild(big);
-    div.appendChild(br);
-  }
-  div.dataset.card = card.id;
-  return div;
+const div = document.createElement('div');
+div.className = 'card' + (faceUp ? '' : ' back');
+if (faceUp){
+const red = (card.suit==='H' || card.suit==='D');
+if (red) div.classList.add('red');
+const tl = document.createElement('div'); tl.className='corner top';
+const br = document.createElement('div'); br.className='corner bottom';
+const rank = document.createElement('div'); rank.className='rank'; rank.textContent = RANK_LABEL[card.rank];
+const suit = document.createElement('div'); suit.className='suit'; suit.textContent = SUIT_SYMBOL[card.suit];
+const rank2 = rank.cloneNode(true);
+const suit2 = suit.cloneNode(true);
+tl.appendChild(rank); tl.appendChild(suit);
+br.appendChild(rank2); br.appendChild(suit2);
+const big = document.createElement('div'); big.className='big'; big.textContent = SUIT_SYMBOL[card.suit];
+div.appendChild(tl); div.appendChild(big); div.appendChild(br);
 }
-function renderTrumpFace(card){
-  const el = document.createElement('div');
-  el.className = 'card';
-  const red = (card.suit==='H' || card.suit==='D');
-  if (red) el.classList.add('red');
-  el.appendChild(cardEl(card, true).children[0]?.cloneNode(true) || document.createElement('div'));
-  el.innerHTML = ''; // очистим и перерисуем нормально
-  const tl = document.createElement('div'); tl.className='corner top';
-  const br = document.createElement('div'); br.className='corner bottom';
-  const rank = document.createElement('div'); rank.className='rank'; rank.textContent = RANK_LABEL[card.rank];
-  const suit = document.createElement('div'); suit.className='suit'; suit.textContent = SUIT_SYMBOL[card.suit];
-  tl.appendChild(rank); tl.appendChild(suit);
-  const rank2 = document.createElement('div'); rank2.className='rank'; rank2.textContent = RANK_LABEL[card.rank];
-  const suit2 = document.createElement('div'); suit2.className='suit'; suit2.textContent = SUIT_SYMBOL[card.suit];
-  br.appendChild(rank2); br.appendChild(suit2);
-  const big = document.createElement('div'); big.className='big'; big.textContent = SUIT_SYMBOL[card.suit];
-  el.appendChild(tl); el.appendChild(big); el.appendChild(br);
-  return el;
+div.dataset.card = card.id;
+return div;
 }
 function setStatus(msg){ el.status.textContent = msg; }
+/* ==== Сохранение ==== */
 function saveState(){
-  const st = {
-    difficulty,
-    score,
-    game: game.serialize()
-  };
-  localStorage.setItem(LS_STATE, JSON.stringify(st));
+const st = { difficulty, score, game: game.serialize() };
+localStorage.setItem(LS_STATE, JSON.stringify(st));
 }
 function restoreState(){
-  try{
-    const raw = localStorage.getItem(LS_STATE);
-    if (!raw) return false;
-    const st = JSON.parse(raw);
-    difficulty = st.difficulty || 'easy';
-    score = st.score || score;
-    game = Game.fromSerialized(st.game);
-    return true;
-  } catch { return false; }
+try{
+const raw = localStorage.getItem(LS_STATE);
+if (!raw) return false;
+const st = JSON.parse(raw);
+difficulty = st.difficulty || 'easy';
+score = st.score || score;
+game = Game.fromSerialized(st.game);
+return true;
+} catch { return false; }
 }
 function loadScore(){
-  try{
-    const s = JSON.parse(localStorage.getItem(LS_SCORE) || '{}');
-    if (s && s.easy && s.med && s.hard) return s;
-  } catch {}
-  return { easy:{w:0,d:0,l:0}, med:{w:0,d:0,l:0}, hard:{w:0,d:0,l:0} };
+try{
+const s = JSON.parse(localStorage.getItem(LS_SCORE) || '{}');
+if (s && s.easy && s.med && s.hard) return s;
+} catch {}
+return { easy:{w:0,d:0,l:0}, med:{w:0,d:0,l:0}, hard:{w:0,d:0,l:0} };
 }
 function saveScore(){ localStorage.setItem(LS_SCORE, JSON.stringify(score)); }
-
 /* ==== Рендер ==== */
 function renderAll(){
-  renderHUD();
-  renderStock();
-  renderHands();
-  renderTable();
-  updateButtons();
+renderHUD();
+renderStock();
+renderHands();
+renderTable();
+updateButtons();
+fitPlayerHand(); // после рендера — вписать руку
 }
 function renderHUD(){
-  el.hudDifficulty.textContent = DIFF_LABEL[difficulty];
-  el.hudAttacker.textContent = game.attacker==='human'?'Вы':'Соперник';
-  el.hudTrump.textContent = SUIT_SYMBOL[game.trump];
-  const S = score[difficulty] || {w:0,d:0,l:0};
-  el.stWins.textContent = S.w; el.stDraws.textContent = S.d; el.stLosses.textContent = S.l;
-  el.selDifficulty.value = difficulty;
+el.hudDifficulty.textContent = DIFF_LABEL[difficulty];
+el.hudAttacker.textContent = game.attacker==='human'?'Вы':'Соперник';
+el.hudTrump.textContent = SUIT_SYMBOL[game.trump];
+const S = score[difficulty] || {w:0,d:0,l:0};
+el.stWins.textContent = S.w; el.stDraws.textContent = S.d; el.stLosses.textContent = S.l;
+el.selDifficulty.value = difficulty;
 }
 function renderStock(){
-  el.deckCount.textContent = game.cardsLeftInStock();
-  // колода — закрытый «верх»
-  // козырь — открытая нижняя
-  el.trumpCard.innerHTML = '';
-  if (game.trumpCard){
-    el.trumpCard.replaceWith(el.trumpCard.cloneNode(false));
-    const newTrump = document.getElementById('trumpCard');
-    el.trumpCard = newTrump;
-    el.trumpCard.replaceWith(newTrump);
-    newTrump.outerHTML = renderCardHTML(game.trumpCard);
-  } else {
-    // если козырь уже подобран — показываем пустую карту
-    el.trumpCard.className='card back';
-    el.trumpCard.innerHTML='';
-  }
-  // перестроим снова, чтобы trump отрисовать корректно
-  const tHolder = document.getElementById('trumpCard');
-  if (tHolder){
-    tHolder.innerHTML = '';
-    if (game.trumpCard){
-      const tr = cardEl(game.trumpCard, true);
-      tHolder.appendChild(tr);
-    } else {
-      const back = document.createElement('div'); back.className='card back'; back.style.visibility='hidden';
-      tHolder.appendChild(back);
-    }
-  }
-  el.discardCount.textContent = game.discard.length;
+el.deckCount.textContent = game.cardsLeftInStock();
+const holder = document.getElementById('trumpCard');
+if (!holder) return;
+holder.innerHTML = '';
+if (game.trumpCard){ holder.appendChild(cardEl(game.trumpCard, true)); }
+else{
+const back = document.createElement('div'); back.className = 'card back'; back.style.visibility = 'hidden'; holder.appendChild(back);
 }
-function renderCardHTML(card){
-  // вспомогательная для быстрой замены
-  const d = document.createElement('div');
-  d.className='card';
-  const red = (card.suit==='H' || card.suit==='D');
-  if (red) d.classList.add('red');
-  const tl = document.createElement('div'); tl.className='corner top';
-  const br = document.createElement('div'); br.className='corner bottom';
-  const rank = document.createElement('div'); rank.className='rank'; rank.textContent = RANK_LABEL[card.rank];
-  const suit = document.createElement('div'); suit.className='suit'; suit.textContent = SUIT_SYMBOL[card.suit];
-  const rank2 = document.createElement('div'); rank2.className='rank'; rank2.textContent = RANK_LABEL[card.rank];
-  const suit2 = document.createElement('div'); suit2.className='suit'; suit2.textContent = SUIT_SYMBOL[card.suit];
-  const big = document.createElement('div'); big.className='big'; big.textContent = SUIT_SYMBOL[card.suit];
-  tl.appendChild(rank); tl.appendChild(suit);
-  br.appendChild(rank2); br.appendChild(suit2);
-  d.appendChild(tl); d.appendChild(big); d.appendChild(br);
-  return d.outerHTML;
+el.discardCount.textContent = game.discard.length;
 }
 function renderHands(){
-  // AI: рубашкой
-  el.aiHand.innerHTML = '';
-  const aiCount = game.hands.ai.length;
-  for (let i=0;i<aiCount;i++){
-    const back = cardEl({suit:'S', rank:6, id:'X'}, false);
-    el.aiHand.appendChild(back);
-  }
-  // Player: лицом, сортировка уже в модели
-  el.playerHand.innerHTML = '';
-  for (const c of game.hands.human){
-    const cardDiv = cardEl(c, true);
-    cardDiv.dataset.card = c.id;
-    cardDiv.classList.add('draggable');
-    cardDiv.addEventListener('pointerdown', (e)=>startDrag(e, c, cardDiv));
-    el.playerHand.appendChild(cardDiv);
-  }
+// ИИ: для десктопа — как было, для мобилы — мини-бейдж (счетчик)
+el.aiHand.innerHTML = '';
+const aiCount = game.hands.ai.length;
+if (window.matchMedia('(min-width: 701px)').matches){
+for (let i=0;i<aiCount;i++){
+const back = cardEl({suit:'S', rank:6, id:'X'}, false);
+el.aiHand.appendChild(back);
+}
+}
+if (el.aiCount) el.aiCount.textContent = aiCount;
+// Игрок
+el.playerHand.innerHTML = '';
+for (const c of game.hands.human){
+const cardDiv = cardEl(c, true);
+cardDiv.dataset.card = c.id;
+cardDiv.classList.add('draggable');
+cardDiv.addEventListener('pointerdown', (e)=>startDrag(e, c, cardDiv));
+el.playerHand.appendChild(cardDiv);
+}
 }
 function renderTable(){
-  el.table.innerHTML = '';
-  for (let i=0;i<game.table.length;i++){
-    const pair = game.table[i];
-    const pile = document.createElement('div'); pile.className='pile'; pile.dataset.index = i;
-    const attackCard = cardEl(pair.a, true);
-    const attWrap = attackCard;
-    pile.appendChild(attWrap);
-    if (!pair.d){
-      // дроп-зона для защиты
-      pile.classList.add('drop-def-target');
-    }
-    if (pair.d){
-      const defCard = cardEl(pair.d, true);
-      defCard.classList.add('cover');
-      pile.appendChild(defCard);
-    }
-    el.table.appendChild(pile);
-  }
-  // если можно атаковать/подкинуть — подсветим стол как дроп-зону
-  if (game.attacker==='human' && game.table.length < game.maxAttackCardsThisBout()){
-    el.table.classList.add('drop-attack-target');
-  } else {
-    el.table.classList.remove('drop-attack-target');
-  }
+el.table.innerHTML = '';
+for (let i=0;i<game.table.length;i++){
+const pair = game.table[i];
+const pile = document.createElement('div'); pile.className='pile'; pile.dataset.index = i;
+const attackCard = cardEl(pair.a, true);
+pile.appendChild(attackCard);
+if (!pair.d){ pile.classList.add('drop-def-target'); }
+if (pair.d){
+const defCard = cardEl(pair.d, true);
+defCard.classList.add('cover');
+pile.appendChild(defCard);
 }
-
+el.table.appendChild(pile);
+}
+if (game.attacker==='human' && game.table.length < game.maxAttackCardsThisBout()){
+el.table.classList.add('drop-attack-target');
+} else {
+el.table.classList.remove('drop-attack-target');
+}
+}
 /* ==== DnD ==== */
 function startDrag(e, card, cardDiv){
-  e.preventDefault();
-  const canAttack = (game.attacker==='human' && game.canAttackWith(card));
-  const defTargets = [];
-  if (game.defender==='human'){
-    // вы защищающийся: можно тащить только если можно побить хотя бы что-то
-    for (let i=0;i<game.table.length;i++){
-      const p = game.table[i];
-      if (!p.d && game.canDefendWith(i, card)){
-        defTargets.push(i);
-      }
-    }
-  }
-  if (!canAttack && defTargets.length===0){
-    setStatus('Этой картой сейчас ход невозможен.');
-    return;
-  }
-
-  cardDiv.setPointerCapture(e.pointerId);
-
-  const ghost = cardEl(card, true);
-  ghost.classList.add('ghost');
-  document.body.appendChild(ghost);
-
-  dragging = {
-    card, ghost, pointerId: e.pointerId, lastPos: {x:e.clientX,y:e.clientY},
-    canAttack, defTargets
-  };
-  updateGhost(e.clientX, e.clientY);
-  highlightDrops();
-
-  const onMove = (ev)=>{
-    dragging.lastPos = {x:ev.clientX, y:ev.clientY};
-    updateGhost(ev.clientX, ev.clientY);
-    highlightTargetUnder(ev.clientX, ev.clientY);
-  };
-  const onUp = (ev)=>{
-    window.removeEventListener('pointermove', onMove);
-    cardDiv.releasePointerCapture(dragging.pointerId);
-    const drop = detectDrop(ev.clientX, ev.clientY);
-    const payload = dragging; dragging = null;
-    if (payload.ghost && payload.ghost.parentNode) payload.ghost.parentNode.removeChild(payload.ghost);
-    clearDropHighlights();
-
-    if (!drop){ setStatus('Отменено.'); return; }
-    // Атака
-    if (drop.type==='attack'){
-      if (!game.canAttackWith(payload.card)){ setStatus('Подкидка этой картой запрещена.'); return; }
-      game.attackPlay(payload.card, 'human');
-      saveState();
-      renderAll();
-      // теперь можно попросить «Соперник защищается»
-      setStatus('Вы подкинули. Нажмите «Соперник защищается», чтобы он начал покрывать.');
-      return;
-    }
-    // Защита
-    if (drop.type==='def' && typeof drop.index==='number'){
-      if (!game.canDefendWith(drop.index, payload.card)){ setStatus('Этой картой нельзя покрыть выбранную.'); return; }
-      game.defendPlay(drop.index, payload.card, 'human');
-      saveState();
-      renderAll();
-      // Если все покрыто — вы можете «Завершить атаку» (если атакует ИИ)
-      updateAfterHumanDefense();
-      return;
-    }
-  };
-  window.addEventListener('pointermove', onMove);
-  window.addEventListener('pointerup', onUp, { once:true });
+e.preventDefault();
+const canAttack = (game.attacker==='human' && game.canAttackWith(card));
+const defTargets = [];
+if (game.defender==='human'){
+for (let i=0;i<game.table.length;i++){
+const p = game.table[i];
+if (!p.d && game.canDefendWith(i, card)){ defTargets.push(i); }
+}
+}
+if (!canAttack && defTargets.length===0){
+setStatus('Этой картой сейчас ход невозможен.');
+return;
+}
+try { cardDiv.setPointerCapture(e.pointerId); } catch (_) {}
+const ghost = cardEl(card, true);
+ghost.classList.add('ghost');
+document.body.appendChild(ghost);
+dragging = {
+card, ghost, pointerId: e.pointerId, lastPos: {x:e.clientX,y:e.clientY},
+canAttack, defTargets
+};
+updateGhost(e.clientX, e.clientY);
+highlightDrops();
+let moveHandler = null;
+let upHandler = null;
+moveHandler = (ev)=>{
+if (!dragging) return;
+dragging.lastPos = {x:ev.clientX, y:ev.clientY};
+updateGhost(ev.clientX, ev.clientY);
+highlightTargetUnder(ev.clientX, ev.clientY);
+};
+upHandler = (ev)=>{
+if (!dragging) return;
+window.removeEventListener('pointermove', moveHandler);
+window.removeEventListener('pointerup', upHandler);
+try { if (cardDiv.hasPointerCapture && dragging.pointerId != null) { cardDiv.releasePointerCapture(dragging.pointerId); } } catch (_) {}
+const drop = detectDrop(ev.clientX, ev.clientY);
+const payload = dragging; dragging = null;
+if (payload.ghost && payload.ghost.parentNode) payload.ghost.parentNode.removeChild(payload.ghost);
+clearDropHighlights();
+if (!drop){ setStatus('Отменено.'); return; }
+if (drop.type==='attack'){
+if (!game.canAttackWith(payload.card)){ setStatus('Подкидка этой картой запрещена.'); return; }
+game.attackPlay(payload.card, 'human');
+saveState();
+renderAll();
+setStatus('Вы подкинули. Нажмите «Соперник защищается», чтобы он начал покрывать.');
+return;
+}
+if (drop.type==='def' && typeof drop.index==='number'){
+if (!game.canDefendWith(drop.index, payload.card)){ setStatus('Этой картой нельзя покрыть выбранную.'); return; }
+game.defendPlay(drop.index, payload.card, 'human');
+saveState();
+renderAll();
+updateAfterHumanDefense();
+return;
+}
+};
+window.addEventListener('pointermove', moveHandler, { passive: true });
+window.addEventListener('pointerup', upHandler, { once:true });
 }
 function updateGhost(x,y){
-  if (!dragging) return;
-  const g = dragging.ghost;
-  g.style.left = `${x - g.offsetWidth/2}px`;
-  g.style.top = `${y - g.offsetHeight/2}px`;
+if (!dragging) return;
+const g = dragging.ghost;
+g.style.left = `${x - g.offsetWidth/2}px`;
+g.style.top = `${y - g.offsetHeight/2}px`;
 }
 function getRect(el){ return el.getBoundingClientRect(); }
 function highlightDrops(){
-  // атака
-  if (game.attacker==='human' && game.table.length < game.maxAttackCardsThisBout()){
-    el.table.classList.add('drop-attack');
-  }
-  // защита
-  const piles = Array.from(el.table.children);
-  for (const p of piles){
-    const idx = parseInt(p.dataset.index,10);
-    const pair = game.table[idx];
-    if (!pair.d){
-      p.classList.add('drop-def');
-    }
-  }
+if (game.attacker==='human' && game.table.length < game.maxAttackCardsThisBout()){
+el.table.classList.add('drop-attack');
+}
+const piles = Array.from(el.table.children);
+for (const p of piles){
+const idx = parseInt(p.dataset.index,10);
+const pair = game.table[idx];
+if (!pair.d){ p.classList.add('drop-def'); }
+}
 }
 function clearDropHighlights(){
-  el.table.classList.remove('drop-attack');
-  const piles = Array.from(el.table.children);
-  for (const p of piles){ p.classList.remove('drop-def'); p.classList.remove('target'); }
+el.table.classList.remove('drop-attack');
+const piles = Array.from(el.table.children);
+for (const p of piles){ p.classList.remove('drop-def'); p.classList.remove('target'); }
 }
 function highlightTargetUnder(x,y){
-  const drop = detectDrop(x,y);
-  const piles = Array.from(el.table.children);
-  for (const p of piles){ p.classList.remove('target'); }
-  if (!drop) return;
-  if (drop.type==='attack'){
-    el.table.classList.add('drop-attack');
-  } else if (drop.type==='def'){
-    const p = piles[drop.index];
-    if (p) p.classList.add('target');
-  }
+const drop = detectDrop(x,y);
+const piles = Array.from(el.table.children);
+for (const p of piles){ p.classList.remove('target'); }
+if (!drop) return;
+if (drop.type==='attack'){ el.table.classList.add('drop-attack'); }
+else if (drop.type==='def'){ const p = piles[drop.index]; if (p) p.classList.add('target'); }
 }
 function detectDrop(x,y){
-  const rTable = getRect(el.table);
-  if (x>=rTable.left && x<=rTable.right && y>=rTable.top && y<=rTable.bottom){
-    // атака — дроп на стол
-    if (game.attacker==='human' && game.table.length < game.maxAttackCardsThisBout()){
-      return { type:'attack' };
-    }
-  }
-  // защита — на конкретную стопку без защиты
-  const piles = Array.from(el.table.children);
-  for (let i=0;i<piles.length;i++){
-    const pr = getRect(piles[i]);
-    if (x>=pr.left && x<=pr.right && y>=pr.top && y<=pr.bottom){
-      const pair = game.table[i];
-      if (pair && !pair.d && game.defender==='human'){
-        return { type:'def', index:i };
-      }
-    }
-  }
-  return null;
+const rTable = getRect(el.table);
+if (x>=rTable.left && x<=rTable.right && y>=rTable.top && y<=rTable.bottom){
+if (game.attacker==='human' && game.table.length < game.maxAttackCardsThisBout()){
+return { type:'attack' };
 }
-
+}
+const piles = Array.from(el.table.children);
+for (let i=0;i<piles.length;i++){
+const pr = getRect(piles[i]);
+if (x>=pr.left && x<=pr.right && y>=pr.top && y<=pr.bottom){
+const pair = game.table[i];
+if (pair && !pair.d && game.defender==='human'){
+return { type:'def', index:i };
+}
+}
+}
+return null;
+}
 /* ==== Кнопки/события ==== */
 function updateButtons(){
-  const humanIsAtt = game.attacker==='human';
-  const humanIsDef = game.defender==='human';
-  el.btnAiDefend.disabled = !(humanIsAtt && game.uncoveredCount()>0);
-  el.btnEndAttack.disabled = !(humanIsAtt && game.uncoveredCount()===0 && game.table.length>0);
-  el.btnTake.disabled = !humanIsDef || game.table.length===0;
-  el.tableHint.textContent =
-    humanIsAtt
-      ? 'Перетащите карту на стол. Можно подкидывать по рангам. Затем нажмите «Соперник защищается».'
-      : 'Перетащите карту на атакующую карту для защиты или нажмите «Взять карты».';
+const humanIsAtt = game.attacker==='human';
+const humanIsDef = game.defender==='human';
+// На мобиле будут скрываться auto-hide disabled
+el.btnAiDefend.disabled = !(humanIsAtt && game.uncoveredCount()>0);
+el.btnEndAttack.disabled = !(humanIsAtt && game.uncoveredCount()===0 && game.table.length>0);
+el.btnTake.disabled = !humanIsDef || game.table.length===0;
+ el.tableHint.textContent =
+ humanIsAtt
+ ? 'ходи'
+: 'защищайтесь, сэр(иииха)';
+
 }
 el.btnAiDefend.addEventListener('click', ()=>{
-  if (game.attacker!=='human' || game.uncoveredCount()===0) return;
-  aiDefendAll();
+if (game.attacker!=='human' || game.uncoveredCount()===0) return;
+aiDefendAll();
 });
 el.btnEndAttack.addEventListener('click', ()=>{
-  if (game.attacker!=='human') return;
-  if (game.uncoveredCount()!==0) return;
-  const ok = game.endAttack();
-  if (!ok) return;
-  afterBoutCommon();
+if (game.attacker!=='human') return;
+if (game.uncoveredCount()!==0) return;
+const ok = game.endAttack();
+if (!ok) return;
+afterBoutCommon();
 });
 el.btnTake.addEventListener('click', ()=>{
-  if (game.defender!=='human') return;
-  if (game.table.length===0) return;
-  game.takeAll('human');
-  afterBoutCommon();
+if (game.defender!=='human') return;
+if (game.table.length===0) return;
+game.takeAll('human');
+afterBoutCommon();
 });
-
 el.btnNew.addEventListener('click', ()=>{
-  game.newGame('human');
-  saveState(); renderAll();
-  setStatus('Новая игра. Вы начинаете.');
+game.newGame('human');
+saveState(); renderAll();
+setStatus('Новая игра. Вы начинаете.');
 });
 el.btnSwitch.addEventListener('click', ()=>{
-  const first = (game.attacker==='human') ? 'ai' : 'human';
-  game.newGame(first);
-  saveState(); renderAll();
-  setStatus(first==='human' ? 'Вы начинаете.' : 'Соперник начинает.');
-  if (first==='ai'){
-    setTimeout(()=>aiAttackLoop(), 450);
-  }
+const first = (game.attacker==='human') ? 'ai' : 'human';
+game.newGame(first);
+saveState(); renderAll();
+setStatus(first==='human' ? 'Вы начинаете.' : 'Соперник начинает.');
+if (first==='ai'){ setTimeout(()=>aiAttackLoop(), 450); }
 });
 el.selDifficulty.addEventListener('change', ()=>{
-  difficulty = el.selDifficulty.value;
-  saveState(); renderHUD();
+difficulty = el.selDifficulty.value;
+saveState(); renderHUD();
 });
 el.btnResetStats.addEventListener('click', ()=>{
-  if (!confirm('Сбросить всю статистику по сложностям?')) return;
-  score = { easy:{w:0,d:0,l:0}, med:{w:0,d:0,l:0}, hard:{w:0,d:0,l:0} };
-  saveScore();
-  renderHUD();
+if (!confirm('Сбросить всю статистику по сложностям?')) return;
+score = { easy:{w:0,d:0,l:0}, med:{w:0,d:0,l:0}, hard:{w:0,d:0,l:0} };
+saveScore();
+renderHUD();
 });
 el.modalOk.addEventListener('click', ()=>{
-  el.modalGame.classList.remove('open');
-  game.newGame('human'); saveState(); renderAll();
-  setStatus('Новая игра. Вы начинаете.');
+el.modalGame.classList.remove('open');
+game.newGame('human'); saveState(); renderAll();
+setStatus('Новая игра. Вы начинаете.');
 });
-
 /* ==== ИИ ==== */
 function aiAttackLoop(){
-  // ИИ — атакующий. Алгоритм:
-  // 1) Если стол пуст — выбрать стартовую карту.
-  // 2) Пока лимит и можно подкинуть — подкидывать.
-  // Каждый шаг — даем человеку защищаться.
-  if (game.attacker!=='ai') return;
-  setStatus('Соперник атакует…');
-
-  function aiAttackStep(){
-    if (game.attacker!=='ai') return;
-
-    const limit = game.maxAttackCardsThisBout();
-    const canAdd = game.table.length < limit;
-
-    // Если на столе есть непокрытые — ждем защиты человека
-    if (game.uncoveredCount()>0){
-      updateButtons();
-      return; // человек должен покрывать
-    }
-
-    // Все покрыто или стол пуст — решаем: подкидывать или пасовать
-    const move = chooseAiAttackMove(canAdd);
-    if (!move || move.type==='pass'){
-      if (game.table.length>0){
-        // завершить атаку
-        game.endAttack();
-        afterBoutCommon();
-      } else {
-        // если не смог начать атаку — передадим ход человеку (редко возможно, когда нет карт)
-        const prev = game.attacker;
-        game.attacker = game.defender; game.defender = prev;
-        afterBoutCommon();
-      }
-      return;
-    }
-    if (move.type==='attack' && move.card){
-      game.attackPlay(move.card, 'ai');
-      saveState(); renderAll();
-      // теперь ваша очередь защищаться
-      setStatus('Соперник подкинул. Ваша защита.');
-      updateButtons();
-      return;
-    }
-  }
-
-  // начнем пошагово
-  setTimeout(aiAttackStep, 300);
+if (game.attacker!=='ai') return;
+if (aiThinking) return;
+aiThinking = true;
+setStatus('Соперник атакует…');
+function aiAttackStep(){
+const limit = game.maxAttackCardsThisBout();
+const canAdd = game.table.length < limit;
+const move = chooseAiAttackMove(canAdd);
+if (!move || move.type==='pass'){
+if (game.table.length>0){
+setStatus('Соперник не стал подкидывать. Атака завершена.');
+game.endAttack();
+aiThinking = false;
+afterBoutCommon();
+} else {
+setStatus('Соперник не может начать атаку. Ваш ход.');
+const prev = game.attacker;
+game.attacker = game.defender; game.defender = prev;
+aiThinking = false;
+afterBoutCommon();
 }
-
+return;
+}
+if (move.type==='attack' && move.card){
+const ok = game.attackPlay(move.card, 'ai');
+if (!ok){
+setStatus('ИИ не смог подкинуть карту (ошибка правил). Ваш ход.');
+const prev = game.attacker;
+game.attacker = game.defender; game.defender = prev;
+aiThinking = false;
+afterBoutCommon();
+return;
+}
+saveState(); renderAll();
+setStatus('Соперник подкинул: ' + RANK_LABEL[move.card.rank] + SUIT_SYMBOL[move.card.suit] + '. Ваша защита.');
+aiThinking = false;
+updateButtons();
+return;
+}
+}
+setTimeout(aiAttackStep, 300);
+}
 function aiDefendAll(){
-  // ИИ — защищается против человеческой атаки
-  if (game.defender!=='ai') return;
-  setStatus('Соперник покрывает…');
-
-  setTimeout(()=>{
-    // Пытаемся покрыть все непокрытые
-    let success = true;
-    for (let i=0;i<game.table.length;i++){
-      const pair = game.table[i];
-      if (pair.d) continue;
-      const defense = chooseAiDefenseFor(pair.a);
-      if (!defense){ success = false; break; }
-      game.defendPlay(i, defense, 'ai');
-    }
-    saveState(); renderAll();
-    if (!success){
-      // Не смог покрыть — берет
-      setStatus('Соперник берет карты.');
-      game.takeAll('ai');
-      afterBoutCommon();
-      return;
-    } else {
-      // Все покрыто — вы можете подкинуть дальше или завершить атаку
-      setStatus('Соперник покрыл. Можно подкинуть еще или завершить атаку.');
-      updateButtons();
-    }
-  }, 400);
+if (game.defender!=='ai') return;
+setStatus('Соперник покрывает…');
+setTimeout(()=>{
+let success = true;
+for (let i=0;i<game.table.length;i++){
+const pair = game.table[i];
+if (pair.d) continue;
+const defense = chooseAiDefenseFor(pair.a);
+if (!defense){ success = false; break; }
+game.defendPlay(i, defense, 'ai');
 }
-
+saveState(); renderAll();
+if (!success){
+setStatus('Соперник берет карты.');
+game.takeAll('ai');
+afterBoutCommon();
+return;
+} else {
+setStatus('Соперник покрыл. Ожидаем следующий ход.');
+if (game.attacker==='ai'){ setTimeout(()=>aiAttackLoop(), 400); }
+else {
+if (game.uncoveredCount() === 0 && game.table.length > 0) {
+el.btnEndAttack.disabled = false;
+setStatus('Соперник покрыл. Можете подкинуть еще или завершить атаку.');
+} else { updateButtons(); }
+}
+}
+}, 400);
+}
+function updateAfterHumanDefense(){
+if (game.uncoveredCount() === 0){
+if (game.attacker === 'ai'){
+setStatus('Вы отбились. Соперник думает, подкинуть ли еще.');
+setTimeout(() => aiAttackLoop(), 300);
+} else {
+if (game.table.length > 0) {
+setStatus('Вы отбились. Можно подкинуть еще или завершить атаку.');
+updateButtons();
+} else {
+game.endAttack();
+afterBoutCommon();
+}
+}
+} else {
+if (game.defender === 'human') { setStatus('Есть еще непокрытые карты. Защищайтесь дальше.'); }
+updateButtons();
+}
+}
 function afterBoutCommon(){
-  saveState(); renderAll();
-  // Проверка конца игры (после завершения взятки)
-  const winner = game.checkEnd();
-  if (winner){
-    if (winner==='human') return endGame('Победа! Соперник остался с картами.');
-    if (winner==='ai') return endGame('Поражение. Вы остались с картами.');
-    if (winner==='draw') return endGame('Ничья. Карты закончились у обоих.');
-  }
-  // Если дальше атакует ИИ — запускаем его цикл атаки
-  if (game.attacker==='ai'){
-    setTimeout(()=>aiAttackLoop(), 500);
-  } else {
-    setStatus('Ваш ход.');
-  }
-  updateButtons();
+saveState(); renderAll();
+const winner = game.checkEnd();
+if (winner){
+if (winner==='human') return endGame('Победа! Соперник остался с картами.');
+if (winner==='ai') return endGame('Поражение. Вы остались с картами.');
+if (winner==='draw') return endGame('Ничья. Карты закончились у обоих.');
+}
+if (game.attacker==='ai'){ setTimeout(()=>aiAttackLoop(), 500); }
+else { setStatus('Ваш ход.'); }
+updateButtons();
 }
 function endGame(msg){
-  const res = msg.includes('Победа') ? 'w' : msg.includes('Ничья') ? 'd' : 'l';
-  (score[difficulty] || (score[difficulty]={w:0,d:0,l:0}));
-  if (res==='w') score[difficulty].w++;
-  if (res==='d') score[difficulty].d++;
-  if (res==='l') score[difficulty].l++;
-  saveScore();
-  el.modalTitle.textContent = 'Игра окончена';
-  el.modalText.textContent = msg;
-  el.modalGame.classList.add('open');
-  renderHUD();
+const res = msg.includes('Победа') ? 'w' : msg.includes('Ничья') ? 'd' : 'l';
+(score[difficulty] || (score[difficulty]={w:0,d:0,l:0}));
+if (res==='w') score[difficulty].w++;
+if (res==='d') score[difficulty].d++;
+if (res==='l') score[difficulty].l++;
+saveScore();
+el.modalTitle.textContent = 'Игра окончена';
+el.modalText.textContent = msg;
+el.modalGame.classList.add('open');
+renderHUD();
 }
-
 /* ==== Выбор ходов ИИ ==== */
-function chooseAiAttackMove(canAdd){
-  const hand = game.hands.ai;
-  if (difficulty==='easy'){
-    // random
-    const candidates = hand.filter(c => game.canAttackWith(c));
-    if (!candidates.length) return { type:'pass' };
-    return { type:'attack', card: randOf(candidates) };
-  }
-  if (difficulty==='med'){
-    // Бывалый: атака низкими не-козырями; если стол пуст — старт самой низкой не-козырной,
-    // если подкидка — подкидывать низкое в разрешенных рангах, избегая козырей.
-    const allowed = hand.filter(c => game.canAttackWith(c));
-    if (!allowed.length) return { type:'pass' };
-    const nonTrump = allowed.filter(c => c.suit!==game.trump);
-    const pool = (nonTrump.length ? nonTrump : allowed);
-    pool.sort((a,b)=>a.rank-b.rank);
-    return { type:'attack', card: pool[0] };
-  }
-  // hard: небольшой поиск (ограниченный по времени)
-  const start = Date.now();
-  const timeMs = 900; // небольшой бюджет, чтобы UI не «висел»
-  const allowed = hand.filter(c => game.canAttackWith(c));
-  if (!allowed.length) return { type:'pass' };
-  // Оценим каждую стартовую/подкидочную карту: смоделируем лучшую защиту человека и «выгоду»
-  let best = null, bestScore = -1e9;
-  for (const c of allowed){
-    const sc = scoreAttackCardHeuristic(c);
-    if (sc > bestScore){ bestScore=sc; best = c; }
-    if (Date.now()-start > timeMs) break;
-  }
-  return { type:'attack', card: best || allowed[0] };
+function chooseAiAttackMove(){
+const hand = game.hands.ai;
+if (difficulty==='easy'){
+const candidates = hand.filter(c => game.canAttackWith(c));
+if (!candidates.length) return { type:'pass' };
+return { type:'attack', card: randOf(candidates) };
+}
+if (difficulty==='med'){
+const allowed = hand.filter(c => game.canAttackWith(c));
+if (!allowed.length) return { type:'pass' };
+const nonTrump = allowed.filter(c => c.suit!==game.trump);
+const pool = (nonTrump.length ? nonTrump : allowed);
+pool.sort((a,b)=>a.rank-b.rank);
+return { type:'attack', card: pool[0] };
+}
+const start = Date.now();
+const timeMs = 900;
+const allowed = hand.filter(c => game.canAttackWith(c));
+if (!allowed.length) return { type:'pass' };
+let best = null, bestScore = -1e9;
+for (const c of allowed){
+const sc = scoreAttackCardHeuristic(c);
+if (sc > bestScore){ bestScore=sc; best = c; }
+if (Date.now()-start > timeMs) break;
+}
+return { type:'attack', card: best || allowed[0] };
 }
 function scoreAttackCardHeuristic(c){
-  // Низкий не-козырь приветствуется. Высокий козырь — штраф.
-  let s = 0;
-  const trump = (c.suit===game.trump);
-  s -= c.rank; // чем меньше, тем лучше
-  if (trump) s -= 8;
-  // Бонус, если есть еще карты такого же ранга в руке — проще подкидывать в будущем
-  const sameRank = game.hands.ai.filter(x=>x.rank===c.rank).length - 1;
-  s += sameRank * 3;
-  // Легкий бонус, если у защитника мало карт — шанс заставить взять
-  s += Math.max(0, 6 - game.hands[game.defender].length);
-  return s;
+let s = 0;
+const trump = (c.suit===game.trump);
+s -= c.rank;
+if (trump) s -= 8;
+const sameRank = game.hands.ai.filter(x=>x.rank===c.rank).length - 1;
+s += sameRank * 3;
+s += Math.max(0, 6 - game.hands[game.defender].length);
+return s;
 }
 function chooseAiDefenseFor(target){
-  const hand = game.hands.ai;
-  const options = hand.filter(c => game.beats(c, target));
-  if (!options.length) return null;
-  if (difficulty==='easy') return randOf(options);
-  if (difficulty==='med'){
-    // минимально достаточная, предпочитая не козырь
-    const sameSuit = options.filter(c=>c.suit===target.suit).sort((a,b)=>a.rank-b.rank);
-    if (sameSuit.length) return sameSuit[0];
-    const trumps = options.filter(c=>c.suit===game.trump).sort((a,b)=>a.rank-b.rank);
-    return trumps[0];
-  }
-  // hard: оставим простую политику «минимально достаточная», чтобы не тормозить
-  const sameSuit = options.filter(c=>c.suit===target.suit).sort((a,b)=>a.rank-b.rank);
-  if (sameSuit.length) return sameSuit[0];
-  const trumps = options.filter(c=>c.suit===game.trump).sort((a,b)=>a.rank-b.rank);
-  return trumps[0];
+const hand = game.hands.ai;
+const options = hand.filter(c => game.beats(c, target));
+if (!options.length) return null;
+if (difficulty==='easy') return randOf(options);
+if (difficulty==='med'){
+const sameSuit = options.filter(c=>c.suit===target.suit).sort((a,b)=>a.rank-b.rank);
+if (sameSuit.length) return sameSuit[0];
+const trumps = options.filter(c=>c.suit===game.trump).sort((a,b)=>a.rank-b.rank);
+return trumps[0];
+}
+const sameSuit = options.filter(c=>c.suit===target.suit).sort((a,b)=>a.rank-b.rank);
+if (sameSuit.length) return sameSuit[0];
+const trumps = options.filter(c=>c.suit===game.trump).sort((a,b)=>a.rank-b.rank);
+return trumps[0];
 }
 function randOf(a){ return a[Math.floor(Math.random()*a.length)]; }
-
+/* ==== Мобильные утилиты: стабильная высота и масштаб руки ==== */
+function setViewportUnit(){
+const vh = window.innerHeight * 0.01;
+document.documentElement.style.setProperty('--vh', `${vh}px`);
+}
+function fitPlayerHand(){
+// Рассчитать ширину карты под число карт и ширину контейнера
+const n = game?.hands?.human?.length || 0;
+if (!n) return;
+const hand = el.playerHand;
+const rect = hand.getBoundingClientRect();
+const gap = parseFloat(getComputedStyle(hand).getPropertyValue('--hand-gap')) || 8;
+// Базовые размеры
+const rootStyle = getComputedStyle(document.documentElement);
+const baseW = parseFloat(rootStyle.getPropertyValue('--card-w')) || 82;
+const ratio = (parseFloat(rootStyle.getPropertyValue('--card-h')) || 120) / baseW;
+const available = rect.width;
+const targetW = Math.min(baseW, Math.floor((available - gap * (n - 1)) / n));
+const minW = 44; // минимальный комфортный размер карты на мобиле
+const finalW = Math.max(minW, Math.min(baseW, targetW));
+// Установка только на ветку руки игрока (переменные наследуются)
+hand.style.setProperty('--card-w', `${finalW}px`);
+hand.style.setProperty('--card-h', `${Math.round(finalW * ratio)}px`);
+}
 /* ==== Инициализация ==== */
 function init(){
-  if (!restoreState()){
-    game = new Game();
-  }
-  renderAll();
-  setStatus(game.attacker==='human' ? 'Ваш ход.' : 'Соперник начинает.');
-  if (game.attacker==='ai'){
-    setTimeout(()=>aiAttackLoop(), 500);
-  }
+setViewportUnit();
+window.addEventListener('resize', throttle(()=>{ setViewportUnit(); fitPlayerHand(); }, 100));
+window.addEventListener('orientationchange', throttle(()=>{ setViewportUnit(); fitPlayerHand(); }, 100));
+if (!restoreState()){ game = new Game(); }
+renderAll();
+setStatus(game.attacker==='human' ? 'Ваш ход.' : 'Соперник начинает.');
+if (game.attacker==='ai'){ setTimeout(()=>aiAttackLoop(), 500); }
+}
+function throttle(fn, wait){
+let t=0; return (...args)=>{ const now=Date.now(); if (now-t>wait){ t=now; fn(...args); } };
 }
 init();
-
 /* =========================
-Пояснения по упрощениям:
-- Подкидывание после объявления «беру» (когда защитник берет) не реализовано — для простоты.
-- Взаимная «мгновенная» подкидываемость во время защиты реализована через кнопку «Соперник защищается»,
-  позволяя вам подкинуть несколько карт, затем запустить покрытие ИИ, и повторить цикл.
+Примечания:
+- fitPlayerHand() гарантирует, что карты не переносятся и вписываются в строку.
+- При избытке карт у руки игрока включится горизонтальная прокрутка (не будут "пропадать").
+- На мобильных скрываются неактуальные кнопки (auto-hide), остальные растут (auto-grow).
 ========================= */
 </script>
 </body>

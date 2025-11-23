@@ -1,14 +1,3 @@
-Хорошо, я понял. Проблема в том, что после того как вы отбились от атаки ИИ, игра зависает в статусе "Соперник думает, подкинуть ли еще." и не переходит к следующему шагу или завершению атаки.
-
-Это происходит потому, что в функции `updateAfterHumanDefense()`, когда вы отбиваетесь от атаки ИИ, вызывается `aiAttackStep()`. Внутри `aiAttackStep()` есть проверка `if (game.uncoveredCount()>0)`. Эта проверка возвращает `true`, потому что ваш предыдущий ход только что покрыл карты, и текущий `aiAttackStep()` ожидает, что ИИ всё еще должен был бы что-то покрывать, но его очередь атаковать.
-
-Таким образом, `aiAttackStep()` возвращается раньше, чем ИИ успевает принять решение о продолжении атаки или ее завершении.
-
-Чтобы это исправить, нужно изменить логику `aiAttackStep()`, чтобы он правильно реагировал, когда все карты уже покрыты. А именно, убрать проверку `game.uncoveredCount()>0` в начале `aiAttackStep()`, так как она должна быть гарантированно `0` в этот момент.
-
-Вот полный HTML-файл с исправленной логикой:
-
-```html static/durak2.html
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -546,15 +535,17 @@ function renderTrumpFace(card){
   el.className = 'card';
   const red = (card.suit==='H' || card.suit==='D');
   if (red) el.classList.add('red');
+  el.appendChild(cardEl(card, true).children[0]?.cloneNode(true) || document.createElement('div'));
+  el.innerHTML = ''; // очистим и перерисуем нормально
   const tl = document.createElement('div'); tl.className='corner top';
   const br = document.createElement('div'); br.className='corner bottom';
   const rank = document.createElement('div'); rank.className='rank'; rank.textContent = RANK_LABEL[card.rank];
   const suit = document.createElement('div'); suit.className='suit'; suit.textContent = SUIT_SYMBOL[card.suit];
+  tl.appendChild(rank); tl.appendChild(suit);
   const rank2 = document.createElement('div'); rank2.className='rank'; rank2.textContent = RANK_LABEL[card.rank];
   const suit2 = document.createElement('div'); suit2.className='suit'; suit2.textContent = SUIT_SYMBOL[card.suit];
-  const big = document.createElement('div'); big.className='big'; big.textContent = SUIT_SYMBOL[card.suit];
-  tl.appendChild(rank); tl.appendChild(suit);
   br.appendChild(rank2); br.appendChild(suit2);
+  const big = document.createElement('div'); big.className='big'; big.textContent = SUIT_SYMBOL[card.suit];
   el.appendChild(tl); el.appendChild(big); el.appendChild(br);
   return el;
 }
@@ -605,22 +596,51 @@ function renderHUD(){
 }
 function renderStock(){
   el.deckCount.textContent = game.cardsLeftInStock();
-
-  // Рисуем козырь (нижняя карта колоды)
-  const holder = document.getElementById('trumpCard');
-  if (!holder) return;
-  holder.innerHTML = '';
+  // колода — закрытый «верх»
+  // козырь — открытая нижняя
+  el.trumpCard.innerHTML = '';
   if (game.trumpCard){
-    const t = cardEl(game.trumpCard, true);
-    holder.appendChild(t);
+    el.trumpCard.replaceWith(el.trumpCard.cloneNode(false));
+    const newTrump = document.getElementById('trumpCard');
+    el.trumpCard = newTrump;
+    el.trumpCard.replaceWith(newTrump);
+    newTrump.outerHTML = renderCardHTML(game.trumpCard);
   } else {
-    const back = document.createElement('div');
-    back.className = 'card back';
-    back.style.visibility = 'hidden';
-    holder.appendChild(back);
+    // если козырь уже подобран — показываем пустую карту
+    el.trumpCard.className='card back';
+    el.trumpCard.innerHTML='';
   }
-
+  // перестроим снова, чтобы trump отрисовать корректно
+  const tHolder = document.getElementById('trumpCard');
+  if (tHolder){
+    tHolder.innerHTML = '';
+    if (game.trumpCard){
+      const tr = cardEl(game.trumpCard, true);
+      tHolder.appendChild(tr);
+    } else {
+      const back = document.createElement('div'); back.className='card back'; back.style.visibility='hidden';
+      tHolder.appendChild(back);
+    }
+  }
   el.discardCount.textContent = game.discard.length;
+}
+function renderCardHTML(card){
+  // вспомогательная для быстрой замены
+  const d = document.createElement('div');
+  d.className='card';
+  const red = (card.suit==='H' || card.suit==='D');
+  if (red) d.classList.add('red');
+  const tl = document.createElement('div'); tl.className='corner top';
+  const br = document.createElement('div'); br.className='corner bottom';
+  const rank = document.createElement('div'); rank.className='rank'; rank.textContent = RANK_LABEL[card.rank];
+  const suit = document.createElement('div'); suit.className='suit'; suit.textContent = SUIT_SYMBOL[card.suit];
+  const rank2 = document.createElement('div'); rank2.className='rank'; rank2.textContent = RANK_LABEL[card.rank];
+  const suit2 = document.createElement('div'); suit2.className='suit'; suit2.textContent = SUIT_SYMBOL[card.suit];
+  const big = document.createElement('div'); big.className='big'; big.textContent = SUIT_SYMBOL[card.suit];
+  tl.appendChild(rank); tl.appendChild(suit);
+  br.appendChild(rank2); br.appendChild(suit2);
+  d.appendChild(tl); d.appendChild(big); d.appendChild(br);
+  return d.outerHTML;
 }
 function renderHands(){
   // AI: рубашкой
@@ -670,7 +690,6 @@ function renderTable(){
 /* ==== DnD ==== */
 function startDrag(e, card, cardDiv){
   e.preventDefault();
-
   const canAttack = (game.attacker==='human' && game.canAttackWith(card));
   const defTargets = [];
   if (game.defender==='human'){
@@ -682,15 +701,12 @@ function startDrag(e, card, cardDiv){
       }
     }
   }
-
   if (!canAttack && defTargets.length===0){
     setStatus('Этой картой сейчас ход невозможен.');
     return;
   }
 
-  try {
-    cardDiv.setPointerCapture(e.pointerId);
-  } catch (_) {}
+  cardDiv.setPointerCapture(e.pointerId);
 
   const ghost = cardEl(card, true);
   ghost.classList.add('ghost');
@@ -703,25 +719,14 @@ function startDrag(e, card, cardDiv){
   updateGhost(e.clientX, e.clientY);
   highlightDrops();
 
-  let moveHandler = null;
-  let upHandler = null;
-
-  moveHandler = (ev)=>{
-    if (!dragging) return;
+  const onMove = (ev)=>{
     dragging.lastPos = {x:ev.clientX, y:ev.clientY};
     updateGhost(ev.clientX, ev.clientY);
     highlightTargetUnder(ev.clientX, ev.clientY);
   };
-
-  upHandler = (ev)=>{
-    if (!dragging) return;
-    window.removeEventListener('pointermove', moveHandler);
-    window.removeEventListener('pointerup', upHandler);
-    try {
-      if (cardDiv.hasPointerCapture && dragging.pointerId != null) {
-        cardDiv.releasePointerCapture(dragging.pointerId);
-      }
-    } catch (_) {}
+  const onUp = (ev)=>{
+    window.removeEventListener('pointermove', onMove);
+    cardDiv.releasePointerCapture(dragging.pointerId);
     const drop = detectDrop(ev.clientX, ev.clientY);
     const payload = dragging; dragging = null;
     if (payload.ghost && payload.ghost.parentNode) payload.ghost.parentNode.removeChild(payload.ghost);
@@ -749,9 +754,8 @@ function startDrag(e, card, cardDiv){
       return;
     }
   };
-
-  window.addEventListener('pointermove', moveHandler);
-  window.addEventListener('pointerup', upHandler, { once:true });
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp, { once:true });
 }
 function updateGhost(x,y){
   if (!dragging) return;
@@ -889,24 +893,21 @@ function aiAttackLoop(){
     const limit = game.maxAttackCardsThisBout();
     const canAdd = game.table.length < limit;
 
-    // // УБИРАЕМ: Если на столе есть непокрытые — ждем защиты человека
-    // // Эта проверка не нужна здесь, т.к. aiAttackStep вызывается когда все покрыто или стол пуст
-    // if (game.uncoveredCount()>0){
-    //   updateButtons();
-    //   return; // человек должен покрывать
-    // }
+    // Если на столе есть непокрытые — ждем защиты человека
+    if (game.uncoveredCount()>0){
+      updateButtons();
+      return; // человек должен покрывать
+    }
 
     // Все покрыто или стол пуст — решаем: подкидывать или пасовать
     const move = chooseAiAttackMove(canAdd);
     if (!move || move.type==='pass'){
       if (game.table.length>0){
-        // завершить атаку ИИ, если ему больше нечего подкидывать
-        setStatus('Соперник не стал подкидывать. Атака завершена.');
-        game.endAttack(); // Здесь происходит добор карт и смена ролей
+        // завершить атаку
+        game.endAttack();
         afterBoutCommon();
       } else {
-        // если не смог начать атаку (нет карт или нечего подкинуть) — передадим ход человеку
-        setStatus('Соперник не может начать/продолжить атаку. Ваш ход.');
+        // если не смог начать атаку — передадим ход человеку (редко возможно, когда нет карт)
         const prev = game.attacker;
         game.attacker = game.defender; game.defender = prev;
         afterBoutCommon();
@@ -914,19 +915,10 @@ function aiAttackLoop(){
       return;
     }
     if (move.type==='attack' && move.card){
-      // Пытаемся подкинуть карту
-      const ok = game.attackPlay(move.card, 'ai');
-      if (!ok){
-        // Не удалось подкинуть — это ошибка, но лучше передать ход, чтобы не зависать
-        setStatus('ИИ не смог подкинуть карту (ошибка правил). Ваш ход.');
-        const prev = game.attacker;
-        game.attacker = game.defender; game.defender = prev;
-        afterBoutCommon();
-        return;
-      }
-      // Успешная атака
+      game.attackPlay(move.card, 'ai');
       saveState(); renderAll();
-      setStatus('Соперник подкинул: ' + RANK_LABEL[move.card.rank] + SUIT_SYMBOL[move.card.suit] + '. Ваша защита.');
+      // теперь ваша очередь защищаться
+      setStatus('Соперник подкинул. Ваша защита.');
       updateButtons();
       return;
     }
@@ -959,51 +951,12 @@ function aiDefendAll(){
       afterBoutCommon();
       return;
     } else {
-      // Все покрыто — теперь ход атакующего (ИИ) — он либо подкинет, либо завершит атаку
-      setStatus('Соперник покрыл. Ожидаем его следующий ход.');
-      if (game.attacker==='ai'){
-        setTimeout(()=>aiAttackLoop(), 400); // ИИ продолжает атаку
-      } else {
-        // Если по каким-то причинам ход не у ИИ (т.е. атакующим был человек, и ИИ защитился)
-        // то проверяем, все ли покрыто, и если да - завершаем атаку (со стороны человека)
-        if (game.uncoveredCount() === 0 && game.table.length > 0) {
-            el.btnEndAttack.disabled = false; // Активируем кнопку "Завершить атаку" для игрока
-            setStatus('Соперник покрыл. Можете подкинуть еще или завершить атаку.');
-        } else {
-            updateButtons();
-        }
-      }
+      // Все покрыто — вы можете подкинуть дальше или завершить атаку
+      setStatus('Соперник покрыл. Можно подкинуть еще или завершить атаку.');
+      updateButtons();
     }
   }, 400);
 }
-
-function updateAfterHumanDefense(){
-  // Если все покрыто
-  if (game.uncoveredCount() === 0){
-    // Если атакует ИИ, то он должен решить - подкидывать дальше или завершить
-    if (game.attacker === 'ai'){
-      setStatus('Вы отбились. Соперник думает, подкинуть ли еще.');
-      setTimeout(() => aiAttackStep(), 300); // Важно: запускаем следующий шаг ИИ
-    } else {
-      // Иначе, если атакующий - человек, то он может завершить атаку,
-      // если на столе есть карты
-      if (game.table.length > 0) {
-          setStatus('Вы отбились. Можно подкинуть еще или завершить атаку.');
-          updateButtons(); // Кнопка "Завершить атаку" станет активной
-      } else { // Если стол пуст после защиты (например, отбили первый ход)
-          game.endAttack(); // Завершаем атаку, т.к. нечего больше делать
-          afterBoutCommon();
-      }
-    }
-  } else {
-    // Еще есть непокрытые карты, ждем защиты дальше (если защищается человек)
-    if (game.defender === 'human') {
-        setStatus('Есть еще непокрытые карты. Защищайтесь дальше.');
-    }
-    updateButtons();
-  }
-}
-
 
 function afterBoutCommon(){
   saveState(); renderAll();
