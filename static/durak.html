@@ -503,6 +503,19 @@
         <div class="btns">
           <button id="btnNew" class="btn primary">Новая игра</button>
           <button id="btnSwitch" class="btn">Сменить первого</button>
+          <button id="audioPrev" class="btn" title="Предыдущая">⏮</button>
+          <button id="audioNext" class="btn" title="Следующая">⏭</button>
+          <!-- Панель музыки: вставить в .header сразу после блока с кнопками -->
+          <div
+            id="musicPanel"
+            class="btns"
+            style="gap: 6px; align-items: center; margin-top: 4px">
+            <audio
+              id="bgAudio"
+              preload="auto"
+              controls
+              style="max-width: 300px; height: 40px"></audio>
+          </div>
         </div>
       </div>
       <div class="layout">
@@ -516,20 +529,6 @@
                 <div class="counter">
                   В колоде: <strong id="deckCount">36</strong>
                 </div>
-              </div>
-
-              <!-- Панель музыки: вставить в .header сразу после блока с кнопками -->
-              <div
-                id="musicPanel"
-                class="btns"
-                style="gap: 6px; align-items: center; margin-top: 4px">
-                <button id="audioPrev" class="btn" title="Предыдущая">⏮</button>
-                <audio
-                  id="bgAudio"
-                  preload="auto"
-                  controls
-                  style="max-width: 300px; height: 40px"></audio>
-                <button id="audioNext" class="btn" title="Следующая">⏭</button>
               </div>
 
               <!-- Мини-информация по ИИ (на мобиле основное представление) -->
@@ -735,6 +734,293 @@
         modalText: document.getElementById("modalText"),
         modalOk: document.getElementById("modalOk"),
       };
+
+      // === Вспомогательные: подробные логи для <audio> ===
+      function describeReadyState(rs) {
+        switch (rs) {
+          case 0:
+            return "HAVE_NOTHING(0)";
+          case 1:
+            return "HAVE_METADATA(1)";
+          case 2:
+            return "HAVE_CURRENT_DATA(2)";
+          case 3:
+            return "HAVE_FUTURE_DATA(3)";
+          case 4:
+            return "HAVE_ENOUGH_DATA(4)";
+          default:
+            return String(rs);
+        }
+      }
+      function describeNetworkState(ns) {
+        switch (ns) {
+          case 0:
+            return "NETWORK_EMPTY(0)";
+          case 1:
+            return "NETWORK_IDLE(1)";
+          case 2:
+            return "NETWORK_LOADING(2)";
+          case 3:
+            return "NETWORK_NO_SOURCE(3)";
+          default:
+            return String(ns);
+        }
+      }
+      function attachMediaDebug(media, name = "media") {
+        const logState = (label) => {
+          console.log(
+            `[${name}] ${label} | readyState=${describeReadyState(
+              media.readyState
+            )} | networkState=${describeNetworkState(
+              media.networkState
+            )} | paused=${media.paused} | ct=${
+              Number.isFinite(media.currentTime)
+                ? media.currentTime.toFixed(2)
+                : media.currentTime
+            } | dur=${
+              Number.isFinite(media.duration)
+                ? media.duration.toFixed(2)
+                : media.duration
+            } | vol=${media.volume}`
+          );
+        };
+        const events = [
+          "loadstart",
+          "progress",
+          "loadedmetadata",
+          "loadeddata",
+          "canplay",
+          "canplaythrough",
+          "play",
+          "playing",
+          "pause",
+          "waiting",
+          "stalled",
+          "suspend",
+          "abort",
+          "ended",
+          "timeupdate",
+          "seeking",
+          "seeked",
+          "ratechange",
+          "volumechange",
+          "durationchange",
+          "emptied",
+        ];
+        events.forEach((evt) =>
+          media.addEventListener(evt, () => logState(evt))
+        );
+        media.addEventListener("error", () => {
+          const err = media.error;
+          console.error(
+            `[${name}] error fired: code=${err?.code} message=${
+              err?.message || "(no message)"
+            }`
+          );
+          logState("error-state");
+        });
+        logState("attach");
+      }
+      function tryPlay(media, name = "media") {
+        let p;
+        try {
+          p = media.play();
+        } catch (e) {
+          console.error(`[${name}] play() threw sync error:`, e);
+          return;
+        }
+        if (p && typeof p.then === "function") {
+          p.then(() => {
+            console.log(`[${name}] play() resolved: playing started`);
+          }).catch((e) => {
+            console.warn(
+              `[${name}] play() rejected: name=${e?.name} message=${e?.message}`
+            );
+            // Часто: NotAllowedError — нужен жест пользователя
+          });
+        }
+      }
+      function attachMediaDebug(media, name = "media") {
+        const logState = (label) => {
+          console.log(
+            `[${name}] ${label} | readyState=${describeReadyState(
+              media.readyState
+            )} | networkState=${describeNetworkState(
+              media.networkState
+            )} | paused=${media.paused} | ct=${media.currentTime?.toFixed?.(
+              2
+            )} | dur=${
+              isFinite(media.duration)
+                ? media.duration.toFixed(2)
+                : media.duration
+            } | vol=${media.volume}`
+          );
+        };
+        const events = [
+          "loadstart",
+          "progress",
+          "loadedmetadata",
+          "loadeddata",
+          "canplay",
+          "canplaythrough",
+          "play",
+          "playing",
+          "pause",
+          "waiting",
+          "stalled",
+          "suspend",
+          "abort",
+          "ended",
+          "timeupdate",
+          "seeking",
+          "seeked",
+          "ratechange",
+          "volumechange",
+          "durationchange",
+          "emptied",
+        ];
+        events.forEach((evt) =>
+          media.addEventListener(evt, () => logState(evt))
+        );
+        media.addEventListener("error", () => {
+          const err = media.error;
+          console.error(
+            `[${name}] error fired: code=${err?.code} message=${
+              err?.message || "(no message)"
+            }`
+          );
+          logState("error-state");
+        });
+        // Первичный снимок
+        logState("attach");
+      }
+      function tryPlay(media, name = "media") {
+        let p;
+        try {
+          p = media.play();
+        } catch (e) {
+          console.error(`[${name}] play() threw sync error:`, e);
+          return;
+        }
+        if (p && typeof p.then === "function") {
+          p.then(() => {
+            console.log(`[${name}] play() resolved: playing started`);
+          }).catch((e) => {
+            console.warn(
+              `[${name}] play() rejected: name=${e?.name} message=${e?.message}`
+            );
+            // Наиболее частая причина — политика автоплея (NotAllowedError)
+          });
+        }
+      }
+
+      // === Музыка фона ===
+      // === Музыка фона с подробным логированием ===
+      // === Музыка фона с подробным логированием ===
+      function initAudioPlayer() {
+        const bgAudio = document.getElementById("bgAudio");
+        if (!bgAudio) {
+          console.warn("[bgAudio] element not found");
+          return;
+        }
+
+        console.log(
+          "[bgAudio] init start, origin=",
+          location.origin,
+          " href=",
+          location.href
+        );
+        attachMediaDebug(bgAudio, "bgAudio");
+
+        // Диагностика поддержки кодеков
+        const support = {
+          mp3: bgAudio.canPlayType?.("audio/mpeg"),
+          mp4a: bgAudio.canPlayType?.('audio/mp4; codecs="mp4a.40.2"'),
+          ogg: bgAudio.canPlayType?.('audio/ogg; codecs="vorbis"'),
+          wav: bgAudio.canPlayType?.('audio/wav; codecs="1"'),
+        };
+        console.log("[bgAudio] canPlayType:", support);
+
+        const tracks = [
+          "/static/1.mp3",
+          "/static/2.mp3",
+          "/static/3.mp3",
+          "/static/5.mp3",
+          "/static/6.mp3",
+          "/static/7.mp3",
+          "/static/8.mp3",
+          "/static/9.mp3",
+          "/static/10.mp3",
+        ];
+        let idx = 0;
+
+        // Быстрый чек доступности файлов
+        if (window.fetch) {
+          tracks.forEach((u) => {
+            fetch(u, { method: "HEAD" })
+              .then((r) => console.log(`[bgAudio] HEAD ${u} -> ${r.status}`))
+              .catch((e) => console.warn(`[bgAudio] HEAD failed ${u}:`, e));
+          });
+        }
+
+        const setSrcAndPlay = (i) => {
+          idx = (i + tracks.length) % tracks.length;
+          const nextUrl = tracks[idx];
+          const abs = new URL(nextUrl, location.href).href;
+          console.log(
+            `[bgAudio] setSrcAndPlay -> idx=${idx} url=${nextUrl} abs=${abs}`
+          );
+          bgAudio.src = nextUrl;
+          try {
+            bgAudio.load();
+            console.log("[bgAudio] load() called");
+          } catch (e) {
+            console.warn("[bgAudio] load() threw:", e);
+          }
+          tryPlay(bgAudio, "bgAudio");
+        };
+
+        // Кнопки переключения с логами
+        const btnPrev = document.getElementById("audioPrev");
+        const btnNext = document.getElementById("audioNext");
+        btnPrev?.addEventListener("click", () => {
+          console.log("[bgAudio] Prev click");
+          setSrcAndPlay(idx - 1);
+        });
+        btnNext?.addEventListener("click", () => {
+          console.log("[bgAudio] Next click");
+          setSrcAndPlay(idx + 1);
+        });
+
+        // Зацикленный плейлист
+        bgAudio.addEventListener("ended", () => {
+          console.log("[bgAudio] ended -> next");
+          setSrcAndPlay(idx + 1);
+        });
+
+        // Когда буфер готов — дополнительная попытка
+        bgAudio.addEventListener("canplaythrough", () => {
+          if (bgAudio.paused) {
+            console.log("[bgAudio] canplaythrough -> tryPlay() because paused");
+            tryPlay(bgAudio, "bgAudio");
+          }
+        });
+
+        // Попытка автостарта + фолбэк на первое действие пользователя
+        bgAudio.volume = 0.5;
+        console.log("[bgAudio] init: volume=0.5");
+        setSrcAndPlay(0);
+
+        if (bgAudio.paused) {
+          const unlock = () => {
+            console.log("[bgAudio] pointerdown unlock -> tryPlay()");
+            tryPlay(bgAudio, "bgAudio");
+            document.removeEventListener("pointerdown", unlock);
+          };
+          document.addEventListener("pointerdown", unlock, { once: true });
+        }
+      }
+
       class Game {
         constructor() {
           this.newGame("human");
@@ -876,6 +1162,7 @@
           if (a === 0 && h > 0) return "ai";
           return null;
         }
+
         serialize() {
           return JSON.stringify({
             deck: this.deck.map((c) => c.id),
@@ -898,44 +1185,6 @@
         static fromSerialized(str) {
           const data = JSON.parse(str);
           const g = new Game();
-
-          // === Музыка фона ===
-          function initAudioPlayer() {
-            const bgAudio = document.getElementById("bgAudio");
-            if (!bgAudio) return;
-
-            const tracks = ["./static/1.mp3", "./static/2.mp3"];
-            let idx = 0;
-
-            const setSrcAndPlay = (i) => {
-              idx = (i + tracks.length) % tracks.length;
-              bgAudio.src = tracks[idx];
-              bgAudio.play().catch(() => {
-                // Автовоспроизведение может быть заблокировано — тихо игнорируем
-              });
-            };
-
-            // Кнопки переключения
-            const btnPrev = document.getElementById("audioPrev");
-            const btnNext = document.getElementById("audioNext");
-            btnPrev?.addEventListener("click", () => setSrcAndPlay(idx - 1));
-            btnNext?.addEventListener("click", () => setSrcAndPlay(idx + 1));
-
-            // Зацикленный плейлист
-            bgAudio.addEventListener("ended", () => setSrcAndPlay(idx + 1));
-
-            // Попытка автостарта + фолбэк на первое действие пользователя
-            bgAudio.volume = 0.5;
-            setSrcAndPlay(0);
-
-            if (bgAudio.paused) {
-              const unlock = () => {
-                if (bgAudio.paused) bgAudio.play().catch(() => {});
-                document.removeEventListener("pointerdown", unlock);
-              };
-              document.addEventListener("pointerdown", unlock, { once: true });
-            }
-          }
 
           function cardById(id) {
             if (!id) return null;
@@ -1640,6 +1889,9 @@
           game = new Game();
         }
         renderAll();
+
+        renderAll();
+        console.log("[init] calling initAudioPlayer()");
 
         initAudioPlayer(); // запуск фоновой музыки и панели управления
 
