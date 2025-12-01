@@ -1,0 +1,1885 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Когнитивные замеры — Батарея (RT, 1-back, 1..30, Струп)</title>
+    <style>
+      :root {
+        --bg: #0f1115;
+        --panel: #161923;
+        --panel-2: #1b2030;
+        --text: #e8eef2;
+        --muted: #9fb0c0;
+        --accent: #4dd0e1;
+        --accent-2: #7c4dff;
+        --good: #66bb6a;
+        --warn: #ffa726;
+        --bad: #ef5350;
+        --btn: #243149;
+        --btn-hover: #2d3b58;
+        --border: #283044;
+        --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+        --radius: 14px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        background: radial-gradient(
+          1200px 800px at 80% -100px,
+          #1b2540 0%,
+          var(--bg) 60%
+        );
+        color: var(--text);
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial,
+          sans-serif;
+        line-height: 1.45;
+      }
+
+      .container {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 18px 14px 60px;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+
+      .title {
+        font-size: clamp(20px, 3.2vw, 28px);
+        font-weight: 700;
+        letter-spacing: 0.3px;
+      }
+
+      .spacer {
+        flex: 1;
+      }
+
+      .timer {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: linear-gradient(180deg, #1a2131, #141a27);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        color: var(--accent);
+        font-variant-numeric: tabular-nums;
+        box-shadow: var(--shadow);
+      }
+
+      .panel {
+        background: linear-gradient(180deg, var(--panel), var(--panel-2));
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 16px;
+        box-shadow: var(--shadow);
+      }
+
+      .row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      button {
+        appearance: none;
+        border: none;
+        border-radius: 12px;
+        padding: 12px 16px;
+        background: linear-gradient(180deg, var(--btn), #1d2840);
+        color: var(--text);
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        border: 1px solid var(--border);
+        cursor: pointer;
+        transition: transform 0.06s ease, background 0.2s ease,
+          box-shadow 0.2s ease, border-color 0.2s ease;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+        user-select: none;
+      }
+      button:hover {
+        background: var(--btn-hover);
+        transform: translateY(-1px);
+      }
+      button:active {
+        transform: translateY(0) scale(0.99);
+      }
+      button[disabled] {
+        opacity: 0.6;
+        cursor: not-allowed;
+        transform: none;
+      }
+
+      .primary {
+        background: linear-gradient(180deg, #2a4268, #24365a);
+        border-color: #33517a;
+      }
+      .primary:hover {
+        background: linear-gradient(180deg, #2f4a74, #294067);
+      }
+
+      .danger {
+        background: linear-gradient(180deg, #5c2a2a, #4a2121);
+        border-color: #6e3434;
+      }
+
+      .muted {
+        background: linear-gradient(180deg, #222735, #1a2030);
+        color: var(--muted);
+      }
+
+      .hint {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .surface {
+        width: 100%;
+        min-height: 300px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        background: linear-gradient(180deg, #151a25, #0f141e);
+        border: 1px dashed #2b3448;
+        margin-top: 10px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      canvas {
+        width: 100%;
+        height: 320px;
+        display: block;
+      }
+
+      .grid {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+      }
+      /* Таблица 1..30: 6 колонок на десктопе, 5 колонок на мобиле */
+      #grid30 {
+        grid-template-columns: repeat(6, 1fr);
+      }
+      @media (max-width: 680px) {
+        #grid30 {
+          grid-template-columns: repeat(5, 1fr);
+        }
+      }
+
+      .grid button {
+        aspect-ratio: 1/1;
+        font-size: clamp(13px, 4.2vw, 18px);
+        font-weight: 700;
+        background: linear-gradient(180deg, #1f2a42, #1a2438);
+        border: 1px solid #2a3a55;
+        color: var(--text);
+        border-radius: 10px;
+      }
+
+      .status {
+        margin-top: 10px;
+        color: var(--muted);
+        min-height: 20px;
+      }
+
+      .section-title {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 16px 0 8px;
+      }
+
+      .history {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 12px;
+        margin-top: 10px;
+      }
+
+      .card {
+        padding: 12px;
+        border-radius: 12px;
+        background: linear-gradient(180deg, #141a27, #101622);
+        border: 1px solid var(--border);
+      }
+
+      .kpi {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 8px;
+      }
+      .pill {
+        padding: 6px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: #121a28;
+        font-size: 13px;
+        color: var(--muted);
+        font-variant-numeric: tabular-nums;
+      }
+
+      .good {
+        color: var(--good);
+      }
+      .warn {
+        color: var(--warn);
+      }
+      .bad {
+        color: var(--bad);
+      }
+
+      .instructions {
+        color: var(--muted);
+        margin-top: 6px;
+      }
+
+      .sr-only {
+        position: absolute !important;
+        width: 1px !important;
+        height: 1px !important;
+        padding: 0 !important;
+        margin: -1px !important;
+        overflow: hidden !important;
+        clip: rect(0, 0, 0, 0) !important;
+        white-space: nowrap !important;
+        border: 0 !important;
+      }
+
+      /* Modal */
+      .modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        padding: 12px;
+      }
+      .modal[hidden] {
+        display: none;
+      }
+      .modal-card {
+        width: min(820px, 100%);
+        background: linear-gradient(180deg, var(--panel), var(--panel-2));
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        padding: 16px;
+        color: var(--text);
+        max-height: 90vh;
+        overflow: auto;
+      }
+      .modal-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+      .modal-title {
+        font-weight: 800;
+        font-size: 18px;
+      }
+      .modal-close {
+        margin-left: auto;
+      }
+      .modal .pill {
+        margin-right: 6px;
+        margin-top: 6px;
+      }
+      .modal h4 {
+        margin: 12px 0 6px;
+        font-size: 16px;
+      }
+      .modal ul {
+        margin: 6px 0 10px 18px;
+        padding: 0;
+      }
+      .modal li {
+        margin: 4px 0;
+        color: var(--muted);
+      }
+
+      @keyframes shake {
+        0% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-3px);
+        }
+        50% {
+          transform: translateX(3px);
+        }
+        75% {
+          transform: translateX(-2px);
+        }
+        100% {
+          transform: translateX(0);
+        }
+      }
+
+      @media (max-width: 520px) {
+        .controls {
+          gap: 8px;
+        }
+        .timer {
+          width: 100%;
+          justify-content: space-between;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <div class="title">Когнитивный замер — RT, 1-back, 1..30, Струп</div>
+        <div class="spacer"></div>
+        <div class="timer" aria-live="polite">
+          <span>Таймер:</span>
+          <strong id="timerDisplay">00:00.0</strong>
+        </div>
+      </header>
+
+      <div class="panel">
+        <div class="row">
+          <div class="controls">
+            <button id="startBtn" class="primary">Запустить тест</button>
+            <button id="pauseBtn" class="muted" disabled>Пауза</button>
+            <button id="skipBtn" class="muted" disabled>Пропустить</button>
+            <button id="stopBtn" class="danger" disabled>Стоп</button>
+            <button id="helpBtn" class="muted">Расшифровка</button>
+          </div>
+          <div class="spacer"></div>
+          <div class="hint">
+            Результаты сохраняются локально. Экспорт внизу.
+          </div>
+        </div>
+
+        <div
+          id="instructions"
+          class="instructions"
+          aria-live="polite"
+          style="margin-top: 10px">
+          Батарея из 4 субтестов: Реакция (12 попыток), 1-back по буквам,
+          Таблица 1..30, Струп. Каждый запуск — новая генерация.
+        </div>
+
+        <div class="surface" id="surface">
+          <!-- RT -->
+          <canvas
+            id="rtCanvas"
+            width="900"
+            height="300"
+            aria-label="Поле теста реакции"
+            role="img"
+            style="display: none"></canvas>
+
+          <!-- 1-back -->
+          <div
+            id="nback1Area"
+            style="
+              display: none;
+              text-align: center;
+              width: 100%;
+              padding: 16px;
+            ">
+            <div
+              style="font-size: 52px; font-weight: 800; letter-spacing: 2px"
+              id="nback1Letter">
+              –
+            </div>
+            <div class="row" style="justify-content: center; margin-top: 12px">
+              <button
+                id="nback1MatchBtn"
+                class="primary"
+                style="min-width: 220px">
+                Совпало с предыдущей (Space/J)
+              </button>
+            </div>
+          </div>
+
+          <!-- Grid 1..30 -->
+          <div id="grid30Area" style="display: none; width: 100%; padding: 8px">
+            <div class="grid" id="grid30"></div>
+          </div>
+
+          <!-- Stroop -->
+          <div
+            id="stroopArea"
+            style="
+              display: none;
+              text-align: center;
+              width: 100%;
+              padding: 16px;
+            ">
+            <div
+              id="stroopWord"
+              style="
+                font-size: 46px;
+                font-weight: 800;
+                letter-spacing: 1px;
+                margin-bottom: 12px;
+              ">
+              —
+            </div>
+            <div
+              class="row"
+              id="stroopBtns"
+              style="justify-content: center; gap: 10px; flex-wrap: wrap">
+              <!-- Кнопки создаются динамически -->
+            </div>
+            <div class="hint" style="margin-top: 8px">
+              Горячие клавиши: R (красный), G (зеленый), B (синий), Y (желтый)
+            </div>
+          </div>
+        </div>
+
+        <div id="status" class="status">Готов к запуску.</div>
+      </div>
+
+      <div class="panel" style="margin-top: 16px">
+        <div class="section-title">История замеров</div>
+        <div class="row" style="margin-bottom: 8px">
+          <div class="controls">
+            <button id="exportBtn">Экспорт JSON</button>
+            <button id="clearBtn" class="muted">Очистить историю</button>
+          </div>
+        </div>
+        <div class="history" id="history"></div>
+      </div>
+
+      <!-- Модалка с расшифровкой -->
+      <div id="helpModal" class="modal" hidden>
+        <div
+          class="modal-card"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="helpModalTitle">
+          <div class="modal-head">
+            <div id="helpModalTitle" class="modal-title">
+              Расшифровка и как проходить
+            </div>
+            <button id="helpClose" class="muted modal-close">Закрыть</button>
+          </div>
+          <div id="helpContent"></div>
+        </div>
+      </div>
+
+      <div class="sr-only" aria-live="polite" id="ariaLive"></div>
+    </div>
+
+    <script>
+      (function () {
+        "use strict";
+
+        // ============ Утилиты ============
+
+        function safeParse(json, fallback) {
+          try {
+            const v = JSON.parse(json);
+            return v ?? fallback;
+          } catch {
+            return fallback;
+          }
+        }
+        function storageGet(key, fallback) {
+          try {
+            const raw = localStorage.getItem(key);
+            return raw ? safeParse(raw, fallback) : fallback;
+          } catch {
+            return fallback;
+          }
+        }
+        function storageSet(key, value) {
+          try {
+            localStorage.setItem(key, JSON.stringify(value));
+            return true;
+          } catch {
+            return false;
+          }
+        }
+
+        function nowIso() {
+          return new Date().toISOString();
+        }
+        function clamp(n, a, b) {
+          return Math.max(a, Math.min(b, n));
+        }
+        function fmtMs(ms) {
+          const s = Math.floor(ms / 1000);
+          const mm = Math.floor(s / 60)
+            .toString()
+            .padStart(2, "0");
+          const ss = (s % 60).toString().padStart(2, "0");
+          const d = Math.floor((ms % 1000) / 100);
+          return `${mm}:${ss}.${d}`;
+        }
+        function fmtSec1(ms) {
+          return (ms / 1000).toFixed(1) + "s";
+        }
+
+        function randInt(min, max) {
+          const range = max - min + 1;
+          const buf = new Uint32Array(1);
+          if (crypto?.getRandomValues) crypto.getRandomValues(buf);
+          else buf[0] = Math.floor(Math.random() * 0xffffffff);
+          return min + (buf[0] % range);
+        }
+        function sample(arr) {
+          return arr[randInt(0, arr.length - 1)];
+        }
+        function shuffle(arr) {
+          for (let i = arr.length - 1; i > 0; i--) {
+            const j = randInt(0, i);
+            [arr[i], arr[j]] = [arr[j], arr[i]];
+          }
+          return arr;
+        }
+        function simpleHash(arr) {
+          let h = 2166136261 >>> 0;
+          for (let i = 0; i < arr.length; i++) {
+            h ^= arr[i] + 0x9e3779b9 + (h << 6) + (h >>> 2);
+            h >>>= 0;
+          }
+          return h.toString(16);
+        }
+
+        // ============ Таймер отображения ============
+
+        const timerDisplay = document.getElementById("timerDisplay");
+        const ariaLive = document.getElementById("ariaLive");
+        let timerRunning = false,
+          timerStart = 0,
+          timerPausedAt = 0,
+          rafId = 0;
+
+        function timerReset() {
+          timerRunning = false;
+          timerStart = performance.now();
+          timerPausedAt = 0;
+          timerDisplay.textContent = "00:00.0";
+          cancelAnimationFrame(rafId);
+        }
+        function timerStartRun() {
+          if (timerRunning) return;
+          const base = performance.now();
+          if (timerPausedAt) {
+            timerStart += performance.now() - timerPausedAt;
+            timerPausedAt = 0;
+          } else timerStart = base;
+          timerRunning = true;
+          const loop = () => {
+            if (!timerRunning) return;
+            const elapsed = performance.now() - timerStart;
+            timerDisplay.textContent = fmtMs(elapsed);
+            rafId = requestAnimationFrame(loop);
+          };
+          rafId = requestAnimationFrame(loop);
+        }
+        function timerPause() {
+          if (!timerRunning) return;
+          timerRunning = false;
+          timerPausedAt = performance.now();
+          cancelAnimationFrame(rafId);
+        }
+        function timerGetMs() {
+          if (!timerRunning) {
+            return timerPausedAt ? timerPausedAt - timerStart : 0;
+          }
+          return performance.now() - timerStart;
+        }
+
+        // ============ Состояние/элементы ============
+
+        const VERSION = "2.1.0";
+        const LS_SESSIONS_KEY = "cogpro.sessions.v2";
+        const LS_RECENT_SEEDS = "cogpro.recentSeeds.v2";
+        const LS_RECENT_PERMS = "cogpro.recentPerms.v2";
+
+        const startBtn = document.getElementById("startBtn");
+        const pauseBtn = document.getElementById("pauseBtn");
+        const skipBtn = document.getElementById("skipBtn");
+        const stopBtn = document.getElementById("stopBtn");
+        const helpBtn = document.getElementById("helpBtn");
+
+        const instructions = document.getElementById("instructions");
+        const statusEl = document.getElementById("status");
+
+        const surface = document.getElementById("surface");
+        const rtCanvas = document.getElementById("rtCanvas");
+
+        const nback1Area = document.getElementById("nback1Area");
+        const nback1Letter = document.getElementById("nback1Letter");
+        const nback1MatchBtn = document.getElementById("nback1MatchBtn");
+
+        const grid30Area = document.getElementById("grid30Area");
+        const grid30El = document.getElementById("grid30");
+
+        const stroopArea = document.getElementById("stroopArea");
+        const stroopWord = document.getElementById("stroopWord");
+        const stroopBtns = document.getElementById("stroopBtns");
+
+        const exportBtn = document.getElementById("exportBtn");
+        const clearBtn = document.getElementById("clearBtn");
+        const historyEl = document.getElementById("history");
+
+        const helpModal = document.getElementById("helpModal");
+        const helpClose = document.getElementById("helpClose");
+        const helpContent = document.getElementById("helpContent");
+
+        let session = null;
+        let cancelCurrentTest = null;
+
+        function announce(msg) {
+          ariaLive.textContent = msg;
+        }
+        function setStatus(msg) {
+          statusEl.textContent = msg;
+        }
+        function setInstructions(html) {
+          instructions.innerHTML = html;
+        }
+
+        function setControlsState({ started, paused }) {
+          startBtn.disabled = started;
+          pauseBtn.disabled = !started;
+          skipBtn.disabled = !started;
+          stopBtn.disabled = !started;
+          pauseBtn.textContent = paused ? "Продолжить" : "Пауза";
+        }
+
+        function showOnly(area) {
+          rtCanvas.style.display = area === "rt" ? "block" : "none";
+          nback1Area.style.display = area === "nback1" ? "block" : "none";
+          grid30Area.style.display = area === "grid30" ? "block" : "none";
+          stroopArea.style.display = area === "stroop" ? "block" : "none";
+        }
+
+        // ============ Анти-повторы ============
+
+        function getRecentSeeds() {
+          return storageGet(LS_RECENT_SEEDS, []);
+        }
+        function pushRecentSeed(seed) {
+          const arr = getRecentSeeds();
+          arr.unshift(seed);
+          if (arr.length > 10) arr.pop();
+          storageSet(LS_RECENT_SEEDS, arr);
+        }
+        function uniqueSeed() {
+          const recent = new Set(getRecentSeeds());
+          let seed = "";
+          for (let i = 0; i < 50; i++) {
+            seed = `${nowIso()}-${randInt(0, 1e9)}`;
+            if (!recent.has(seed)) break;
+          }
+          pushRecentSeed(seed);
+          return seed;
+        }
+
+        function getRecentPerms() {
+          return storageGet(LS_RECENT_PERMS, []);
+        }
+        function pushRecentPerm(hash) {
+          const arr = getRecentPerms();
+          arr.unshift(hash);
+          if (arr.length > 10) arr.pop();
+          storageSet(LS_RECENT_PERMS, arr);
+        }
+        function uniquePermutation(n) {
+          const recent = new Set(getRecentPerms());
+          for (let attempt = 0; attempt < 60; attempt++) {
+            const arr = Array.from({ length: n }, (_, i) => i + 1);
+            shuffle(arr);
+            const h = simpleHash(arr);
+            if (!recent.has(h)) {
+              pushRecentPerm(h);
+              return arr;
+            }
+          }
+          const arr = Array.from({ length: n }, (_, i) => i + 1);
+          return shuffle(arr);
+        }
+
+        // ============ История ============
+
+        function loadSessions() {
+          return storageGet(LS_SESSIONS_KEY, []);
+        }
+        function saveSession(sess) {
+          const arr = loadSessions();
+          arr.unshift(sess);
+          if (arr.length > 300) arr.pop();
+          storageSet(LS_SESSIONS_KEY, arr);
+        }
+
+        function fmtPercent(p) {
+          return Math.round(p * 100) + "%";
+        }
+
+        function renderHistory() {
+          const list = loadSessions();
+          if (!list.length) {
+            historyEl.innerHTML = '<div class="hint">Пока нет записей.</div>';
+            return;
+          }
+          historyEl.innerHTML = list
+            .map((item) => {
+              const dt = new Date(item.finishedAt || item.startedAt);
+              const dateStr = dt.toLocaleString();
+              const idx = Math.round(item.index ?? 0);
+              const cls = idx >= 100 ? "good" : idx >= 80 ? "warn" : "bad";
+              const rt = item.tests?.find((t) => t.type === "rt")?.metrics;
+              const nb = item.tests?.find((t) => t.type === "nback1")?.metrics;
+              const g3 = item.tests?.find((t) => t.type === "grid30")?.metrics;
+              const st = item.tests?.find((t) => t.type === "stroop")?.metrics;
+
+              return `
+            <div class="card">
+              <div style="display:flex; justify-content:space-between; align-items:center">
+                <div style="font-weight:700">${dateStr}</div>
+                <div class="pill ${cls}">Индекс: ${idx}</div>
+              </div>
+              <div class="kpi">
+                ${
+                  rt
+                    ? `<div class="pill">RT мед.: ${Math.round(
+                        rt.medianRt
+                      )}ms</div>`
+                    : ""
+                }
+                ${rt ? `<div class="pill">Ложн.: ${rt.falseStarts}</div>` : ""}
+                ${
+                  nb
+                    ? `<div class="pill">1-back acc: ${fmtPercent(
+                        nb.accuracy
+                      )}</div>`
+                    : ""
+                }
+                ${
+                  g3
+                    ? `<div class="pill">1..30: ${fmtSec1(
+                        g3.totalTimeMs
+                      )}</div>`
+                    : ""
+                }
+                ${
+                  st
+                    ? `<div class="pill">Stroop acc: ${fmtPercent(
+                        st.accuracy
+                      )}</div>`
+                    : ""
+                }
+                ${
+                  st
+                    ? `<div class="pill">Интерф.: ${
+                        st.interferenceMs || 0
+                      }ms</div>`
+                    : ""
+                }
+              </div>
+            </div>
+          `;
+            })
+            .join("");
+        }
+
+        function exportSessions() {
+          const data = loadSessions();
+          const blob = new Blob([JSON.stringify(data, null, 2)], {
+            type: "application/json",
+          });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `cogpro-sessions-v2-${new Date()
+            .toISOString()
+            .slice(0, 19)
+            .replace(/[:T]/g, "-")}.json`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(url);
+        }
+
+        function clearHistory() {
+          if (!confirm("Очистить историю замеров?")) return;
+          storageSet(LS_SESSIONS_KEY, []);
+          renderHistory();
+        }
+
+        // ============ Тест 1: Реакция (12 попыток) — БЕЗ ИЗМЕНЕНИЙ ============
+
+        async function runRTLongTest() {
+          showOnly("rt");
+          setInstructions(
+            "Реакция: дождитесь появления круга и нажмите/кликните как можно быстрее. 12 попыток. Ранний клик — ложный старт."
+          );
+          announce("Тест реакции (расширенный)");
+
+          const ctx = rtCanvas.getContext("2d");
+          let width = rtCanvas.width,
+            height = rtCanvas.height;
+
+          function resizeCanvas() {
+            const dpr = window.devicePixelRatio || 1;
+            const rect = rtCanvas.getBoundingClientRect();
+            rtCanvas.width = Math.max(600, Math.floor(rect.width * dpr));
+            rtCanvas.height = Math.floor(300 * dpr);
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.scale(dpr, dpr);
+            width = rect.width;
+            height = 300;
+            drawWaiting();
+          }
+          function bg() {
+            ctx.fillStyle = "#0e1420";
+            ctx.fillRect(0, 0, rtCanvas.width, rtCanvas.height);
+          }
+          function drawWaiting() {
+            ctx.clearRect(0, 0, rtCanvas.width, rtCanvas.height);
+            bg();
+            ctx.fillStyle = "#2b3957";
+            ctx.font = "16px system-ui";
+            ctx.fillText("Ожидайте сигнал...", 16, 26);
+          }
+          function drawCircle(color) {
+            ctx.clearRect(0, 0, rtCanvas.width, rtCanvas.height);
+            bg();
+            const r = Math.min(width, height) * 0.12;
+            ctx.beginPath();
+            ctx.arc(width / 2, height / 2, r, 0, Math.PI * 2);
+            ctx.fillStyle = color;
+            ctx.fill();
+          }
+          function flash(text, color) {
+            ctx.save();
+            ctx.globalAlpha = 0.95;
+            ctx.fillStyle = "#0e1420";
+            ctx.fillRect(0, height - 50, width, 50);
+            ctx.fillStyle = color;
+            ctx.font = "bold 18px system-ui";
+            ctx.fillText(text, 16, height - 16);
+            ctx.restore();
+          }
+
+          resizeCanvas();
+          window.addEventListener("resize", resizeCanvas, { passive: true });
+
+          const trials = 12;
+          const rts = [];
+          let falseStarts = 0;
+          let state = "idle"; // wait -> go
+          let responded = false;
+          let goAt = 0;
+          let trialIndex = 0;
+          let cancelled = false;
+
+          let resolvePromise;
+          const resultPromise = new Promise((res) => (resolvePromise = res));
+
+          function onInput() {
+            if (state === "wait") {
+              falseStarts++;
+              setStatus(`Ложный старт (${falseStarts}). Ждите сигнал.`);
+              flash("Ложный старт", "#ef5350");
+            } else if (state === "go" && !responded) {
+              responded = true;
+              const rt = performance.now() - goAt;
+              rts.push(rt);
+              flash(`${Math.round(rt)} ms`, "#66bb6a");
+              nextTrial();
+            }
+          }
+          function keyHandler(e) {
+            if (e.code === "Space" || e.code === "Enter") {
+              e.preventDefault();
+              onInput();
+            }
+          }
+          function attach() {
+            rtCanvas.addEventListener("pointerdown", onInput, {
+              passive: true,
+            });
+            window.addEventListener("keydown", keyHandler);
+          }
+          function detach() {
+            rtCanvas.removeEventListener("pointerdown", onInput);
+            window.removeEventListener("keydown", keyHandler);
+          }
+
+          cancelCurrentTest = () => {
+            cancelled = true;
+            detach();
+            window.removeEventListener("resize", resizeCanvas);
+            resolvePromise({
+              trials,
+              correct: rts.length,
+              falseStarts,
+              medianRt: rts.length
+                ? Math.round(
+                    rts.slice().sort((a, b) => a - b)[
+                      Math.floor((rts.length - 1) / 2)
+                    ]
+                  )
+                : 0,
+              skipped: true,
+            });
+          };
+
+          attach();
+          await sleep(400);
+
+          async function nextTrial() {
+            if (cancelled) return;
+            trialIndex++;
+            if (trialIndex > trials) {
+              detach();
+              window.removeEventListener("resize", resizeCanvas);
+              const medianRt = rts.length
+                ? rts.slice().sort((a, b) => a - b)[
+                    Math.floor((rts.length - 1) / 2)
+                  ]
+                : 0;
+              const metrics = {
+                trials,
+                correct: rts.length,
+                falseStarts,
+                medianRt: Math.round(medianRt),
+              };
+              setStatus(
+                `Реакция завершена. Мед. RT: ${Math.round(
+                  medianRt
+                )}ms; Ложные: ${falseStarts}`
+              );
+              resolvePromise(metrics);
+              return;
+            }
+            // длиннее паузы: 1000–3000 мс
+            state = "wait";
+            responded = false;
+            drawWaiting();
+            setStatus(`Попытка ${trialIndex}/${trials}. Ждите сигнал...`);
+            await sleep(randInt(1000, 3000));
+            if (cancelled) return;
+            state = "go";
+            drawCircle("#4dd0e1");
+            goAt = performance.now();
+          }
+
+          nextTrial();
+          return resultPromise;
+
+          function sleep(ms) {
+            return new Promise((r) => setTimeout(r, ms));
+          }
+        }
+
+        // ============ Тест 2: 1-back (буква одна назад) ============
+
+        async function runOneBackTest() {
+          showOnly("nback1");
+          setInstructions(
+            "1-back: нажмите “Совпало” (или Space/J), когда текущая буква совпадает с буквой на 1 позицию назад (предыдущей)."
+          );
+          announce("Тест 1-back");
+
+          const seed = uniqueSeed();
+          const letters = [
+            "A",
+            "B",
+            "C",
+            "D",
+            "E",
+            "H",
+            "K",
+            "M",
+            "T",
+            "X",
+            "Y",
+          ];
+          const total = 30;
+          const targetRate = 0.3;
+          const isi = 1500;
+          const showTime = 650;
+
+          const stream = Array.from({ length: total }, () => sample(letters));
+          const isTarget = Array(total).fill(false);
+
+          let targets = Math.max(2, Math.round(total * targetRate));
+          let attempts = 0;
+          while (targets > 0 && attempts < 200) {
+            attempts++;
+            const i = randInt(1, total - 1); // цель возможна с 1-й позиции (есть i-1)
+            if (isTarget[i]) continue;
+            // избегаем плотных кластеров целей
+            const tooClose = isTarget[i - 1] || isTarget[i + 1];
+            if (tooClose && randInt(0, 100) < 70) continue;
+            stream[i] = stream[i - 1];
+            isTarget[i] = true;
+            targets--;
+          }
+
+          let hits = 0,
+            misses = 0,
+            falseAlarms = 0;
+          const rtOnHits = [];
+          let currentIndex = -1,
+            showing = false,
+            cancelled = false,
+            stimShownAt = 0;
+          let pressedThisStim = false;
+
+          function onMatchPress() {
+            if (!showing || pressedThisStim) return;
+            pressedThisStim = true;
+            if (isTarget[currentIndex]) {
+              hits++;
+              const rt = performance.now() - stimShownAt;
+              rtOnHits.push(rt);
+              flash("Верно", "#66bb6a");
+            } else {
+              falseAlarms++;
+              flash("Ложная тревога", "#ef5350");
+            }
+          }
+          function keyHandler(e) {
+            if (e.code === "Space" || e.code === "KeyJ") {
+              e.preventDefault();
+              onMatchPress();
+            }
+          }
+          function attach() {
+            nback1MatchBtn.addEventListener("click", onMatchPress);
+            window.addEventListener("keydown", keyHandler);
+          }
+          function detach() {
+            nback1MatchBtn.removeEventListener("click", onMatchPress);
+            window.removeEventListener("keydown", keyHandler);
+          }
+          function flash(text, color) {
+            setStatus(`1-back: ${text}`);
+            nback1Letter.style.textShadow = `0 0 16px ${color}`;
+            setTimeout(() => (nback1Letter.style.textShadow = "none"), 220);
+          }
+
+          let resolvePromise;
+          const resultPromise = new Promise((res) => (resolvePromise = res));
+
+          cancelCurrentTest = () => {
+            cancelled = true;
+            detach();
+            const expectedTargets = isTarget.filter(Boolean).length;
+            resolvePromise({
+              total,
+              seed,
+              expectedTargets,
+              hits,
+              misses: Math.max(0, expectedTargets - hits),
+              falseAlarms,
+              accuracy: expectedTargets ? hits / expectedTargets : 1,
+              meanRtOnHits: rtOnHits.length
+                ? Math.round(
+                    rtOnHits.reduce((a, b) => a + b, 0) / rtOnHits.length
+                  )
+                : 0,
+              skipped: true,
+            });
+          };
+
+          attach();
+          await sleep(400);
+
+          for (let k = 0; k < total; k++) {
+            if (cancelled) break;
+            currentIndex = k;
+            showing = true;
+            pressedThisStim = false;
+            nback1Letter.textContent = stream[k];
+            stimShownAt = performance.now();
+            setStatus(`Стимул ${k + 1}/${total}`);
+            await sleep(showTime);
+            showing = false;
+            nback1Letter.textContent = "•";
+            await sleep(isi - showTime);
+          }
+
+          detach();
+          const expectedTargets = isTarget.filter(Boolean).length;
+          misses = Math.max(0, expectedTargets - hits);
+          const acc = expectedTargets ? hits / expectedTargets : 1;
+          const meanRt = rtOnHits.length
+            ? Math.round(rtOnHits.reduce((a, b) => a + b, 0) / rtOnHits.length)
+            : 0;
+
+          const metrics = {
+            total,
+            seed,
+            expectedTargets,
+            hits,
+            misses,
+            falseAlarms,
+            accuracy: acc,
+            meanRtOnHits: meanRt,
+          };
+          setStatus(
+            `1-back завершен. Точность: ${Math.round(
+              acc * 100
+            )}%, Попадания: ${hits}/${expectedTargets}, ЛТ: ${falseAlarms}`
+          );
+          resolvePromise(metrics);
+          return resultPromise;
+
+          function sleep(ms) {
+            return new Promise((r) => setTimeout(r, ms));
+          }
+        }
+
+        // ============ Тест 3: Таблица чисел 1..30 ============
+
+        async function runGrid30Test() {
+          showOnly("grid30");
+          setInstructions(
+            "Таблица 1..30: кликайте числа по порядку как можно быстрее. Адаптивная сетка — 6×5 (десктоп) / 5×6 (моб.)."
+          );
+          announce("Таблица 1..30");
+
+          const perm = uniquePermutation(30);
+          const hash = simpleHash(perm);
+
+          grid30El.innerHTML = "";
+          const buttons = [];
+          for (let i = 0; i < 30; i++) {
+            const val = perm[i];
+            const btn = document.createElement("button");
+            btn.textContent = String(val);
+            btn.setAttribute("data-val", String(val));
+            btn.setAttribute("aria-label", `Число ${val}`);
+            grid30El.appendChild(btn);
+            buttons.push(btn);
+          }
+
+          let next = 1,
+            errors = 0,
+            startAt = 0,
+            finished = false,
+            cancelled = false;
+          let resolvePromise;
+          const resultPromise = new Promise((res) => (resolvePromise = res));
+
+          function onClick(e) {
+            const target = e.target.closest("button");
+            if (!target || finished) return;
+            const val = Number(target.getAttribute("data-val"));
+            if (val === next) {
+              target.disabled = true;
+              target.style.opacity = "0.55";
+              target.style.transform = "scale(0.98)";
+              if (next === 1) {
+                startAt = performance.now();
+                setStatus("Таблица: старт!");
+              }
+              next++;
+              if (next > 30) {
+                finished = true;
+                detach();
+                const totalTimeMs = performance.now() - startAt;
+                const metrics = {
+                  permutationHash: hash,
+                  totalTimeMs: Math.round(totalTimeMs),
+                  errors,
+                };
+                setStatus(
+                  `Таблица 1..30 завершена за ${fmtSec1(
+                    totalTimeMs
+                  )}. Ошибки: ${errors}`
+                );
+                resolvePromise(metrics);
+              }
+            } else {
+              errors++;
+              target.style.animation = "shake .2s";
+              setTimeout(() => (target.style.animation = "none"), 240);
+              setStatus(`Неправильно. Ошибки: ${errors}`);
+            }
+          }
+          function attach() {
+            grid30El.addEventListener("click", onClick);
+          }
+          function detach() {
+            grid30El.removeEventListener("click", onClick);
+          }
+
+          cancelCurrentTest = () => {
+            cancelled = true;
+            detach();
+            resolvePromise({
+              permutationHash: hash,
+              totalTimeMs: 0,
+              errors,
+              skipped: true,
+            });
+          };
+
+          attach();
+          return resultPromise;
+        }
+
+        // ============ Тест 4: Струп — БЕЗ ИЗМЕНЕНИЙ ============
+
+        async function runStroopTest() {
+          showOnly("stroop");
+          setInstructions(
+            "Струп: выбирайте ЦВЕТ ЧЕРНИЛ слова. Игнорируйте, что написано. Жмите соответствующую кнопку/клавишу (R/G/B/Y)."
+          );
+          announce("Тест Струпа");
+
+          const COLORS = [
+            { name: "КРАСНЫЙ", key: "R", css: "#ef5350", code: "red" },
+            { name: "ЗЕЛЕНЫЙ", key: "G", css: "#66bb6a", code: "green" },
+            { name: "СИНИЙ", key: "B", css: "#42a5f5", code: "blue" },
+            { name: "ЖЕЛТЫЙ", key: "Y", css: "#ffd54f", code: "yellow" },
+          ];
+
+          // Подготовим кнопки выбора
+          stroopBtns.innerHTML = "";
+          COLORS.forEach((c) => {
+            const btn = document.createElement("button");
+            btn.textContent = `${c.name} (${c.key})`;
+            btn.style.borderColor = "#394b6a";
+            btn.style.background = "linear-gradient(180deg, #1f2a42, #1a2438)";
+            btn.style.color = c.css;
+            btn.style.minWidth = "160px";
+            btn.setAttribute("data-code", c.code);
+            stroopBtns.appendChild(btn);
+          });
+
+          const trials = 24;
+          const congruentRate = 0.5; // 50% конгруэнтных
+          const isi = 1400;
+          const showTime = 1100;
+
+          const trialsArr = [];
+          for (let i = 0; i < trials; i++) {
+            const wordColor = sample(COLORS);
+            let inkColor = wordColor;
+            if (Math.random() > congruentRate) {
+              const others = COLORS.filter((c) => c.code !== wordColor.code);
+              inkColor = sample(others);
+            }
+            trialsArr.push({
+              wordColor,
+              inkColor,
+              congruent: wordColor.code === inkColor.code,
+            });
+          }
+
+          let idx = -1,
+            showing = false,
+            stimShownAt = 0,
+            cancelled = false,
+            pressed = false;
+          let hits = 0,
+            errors = 0;
+          const rtsCorrect = [];
+          const rtsCongruent = [];
+          const rtsIncongruent = [];
+
+          function renderStim(stim) {
+            stroopWord.textContent = stim.wordColor.name;
+            stroopWord.style.color = stim.inkColor.css;
+            stroopWord.style.textShadow = `0 0 10px ${stim.inkColor.css}55`;
+          }
+
+          function onResponse(code) {
+            if (!showing || pressed) return;
+            pressed = true;
+            const current = trialsArr[idx];
+            const correct = code === current.inkColor.code;
+            if (correct) {
+              hits++;
+              const rt = Math.round(performance.now() - stimShownAt);
+              rtsCorrect.push(rt);
+              if (current.congruent) rtsCongruent.push(rt);
+              else rtsIncongruent.push(rt);
+              setStatus(`Струп: верно (${rt}ms)`);
+            } else {
+              errors++;
+              setStatus("Струп: ошибка");
+            }
+          }
+
+          function keyHandler(e) {
+            if (e.key === "r" || e.key === "R") onResponse("red");
+            else if (e.key === "g" || e.key === "G") onResponse("green");
+            else if (e.key === "b" || e.key === "B") onResponse("blue");
+            else if (e.key === "y" || e.key === "Y") onResponse("yellow");
+          }
+          function clickHandler(e) {
+            const btn = e.target.closest("button");
+            if (!btn) return;
+            onResponse(btn.getAttribute("data-code"));
+          }
+          function attach() {
+            window.addEventListener("keydown", keyHandler);
+            stroopBtns.addEventListener("click", clickHandler);
+          }
+          function detach() {
+            window.removeEventListener("keydown", keyHandler);
+            stroopBtns.removeEventListener("click", clickHandler);
+          }
+
+          let resolvePromise;
+          const resultPromise = new Promise((res) => (resolvePromise = res));
+
+          cancelCurrentTest = () => {
+            cancelled = true;
+            detach();
+            const trialsDone = idx + 1;
+            const acc = trialsDone ? hits / trialsDone : 0;
+            const meanRt = rtsCorrect.length
+              ? Math.round(
+                  rtsCorrect.reduce((a, b) => a + b, 0) / rtsCorrect.length
+                )
+              : 0;
+            const meanCong = rtsCongruent.length
+              ? Math.round(
+                  rtsCongruent.reduce((a, b) => a + b, 0) / rtsCongruent.length
+                )
+              : 0;
+            const meanIncong = rtsIncongruent.length
+              ? Math.round(
+                  rtsIncongruent.reduce((a, b) => a + b, 0) /
+                    rtsIncongruent.length
+                )
+              : 0;
+            const interferenceMs = Math.max(0, meanIncong - meanCong) || 0;
+            resolvePromise({
+              trials,
+              hits,
+              errors,
+              accuracy: acc,
+              meanRtCorrect: meanRt,
+              interferenceMs,
+              skipped: true,
+            });
+          };
+
+          attach();
+          await sleep(400);
+
+          for (let i = 0; i < trials; i++) {
+            if (cancelled) break;
+            idx = i;
+            pressed = false;
+            const stim = trialsArr[i];
+            showing = true;
+            renderStim(stim);
+            stimShownAt = performance.now();
+            setStatus(
+              `Струп ${i + 1}/${trials}${
+                stim.congruent ? " (конгр.)" : " (инконгр.)"
+              }`
+            );
+            await sleep(showTime);
+            showing = false;
+            stroopWord.textContent = "•";
+            stroopWord.style.color = "#9fb0c0";
+            stroopWord.style.textShadow = "none";
+            await sleep(isi - showTime);
+          }
+
+          detach();
+          const acc = trials ? hits / trials : 0;
+          const meanRt = rtsCorrect.length
+            ? Math.round(
+                rtsCorrect.reduce((a, b) => a + b, 0) / rtsCorrect.length
+              )
+            : 0;
+          const meanCong = rtsCongruent.length
+            ? Math.round(
+                rtsCongruent.reduce((a, b) => a + b, 0) / rtsCongruent.length
+              )
+            : 0;
+          const meanIncong = rtsIncongruent.length
+            ? Math.round(
+                rtsIncongruent.reduce((a, b) => a + b, 0) /
+                  rtsIncongruent.length
+              )
+            : 0;
+          const interferenceMs = Math.max(0, meanIncong - meanCong) || 0;
+
+          const metrics = {
+            trials,
+            hits,
+            errors,
+            accuracy: acc,
+            meanRtCorrect: meanRt,
+            interferenceMs,
+          };
+          setStatus(
+            `Струп завершен. Точность: ${Math.round(
+              acc * 100
+            )}%, средний RT (верные): ${meanRt}ms, интерференция: ${interferenceMs}ms`
+          );
+          resolvePromise(metrics);
+          return resultPromise;
+
+          function sleep(ms) {
+            return new Promise((r) => setTimeout(r, ms));
+          }
+        }
+
+        // ============ Композитный индекс (4 теста) ============
+
+        function computeIndex(rt, nb1, g30, st) {
+          // RT: базовый коэффициент на 400ms, штраф за ложные старты
+          const rtScore =
+            rt && rt.medianRt > 0
+              ? clamp(100 * (400 / rt.medianRt), 20, 150) - rt.falseStarts * 2
+              : 50;
+
+          // 1-back: точность + бонус за скорость попаданий, штраф за ложные тревоги
+          const nbBase = nb1 ? nb1.accuracy * 100 : 50;
+          const nbRtBonus =
+            nb1 && nb1.meanRtOnHits > 0
+              ? clamp(35 * (380 / nb1.meanRtOnHits), 0, 35)
+              : 0;
+          const nbScore = clamp(
+            nbBase + nbRtBonus - (nb1?.falseAlarms || 0) * 3,
+            20,
+            150
+          );
+
+          // Grid 1..30: масштаб к 90s
+          const gScore =
+            g30 && g30.totalTimeMs > 0
+              ? clamp(100 * (90000 / g30.totalTimeMs), 20, 150) - g30.errors * 2
+              : 50;
+
+          // Stroop: точность и штраф за интерференцию, плюс бонус за скорость верных
+          const stBase = st ? st.accuracy * 100 : 50;
+          const stSpeedBonus =
+            st && st.meanRtCorrect > 0
+              ? clamp(30 * (650 / st.meanRtCorrect), 0, 30)
+              : 0;
+          const stInterfPenalty = st ? clamp(st.interferenceMs / 5, 0, 30) : 0;
+          const stScore = clamp(
+            stBase + stSpeedBonus - stInterfPenalty - (st?.errors || 0) * 2,
+            20,
+            150
+          );
+
+          const index = (rtScore + nbScore + gScore + stScore) / 4;
+          return clamp(Math.round(index), 0, 150);
+        }
+
+        // ============ Расшифровка/градации ============
+
+        function gradeIndex(idx) {
+          if (idx >= 110)
+            return {
+              label: "Высокий",
+              cls: "good",
+              text: "Стабильно высокий уровень работоспособности.",
+            };
+          if (idx >= 95)
+            return {
+              label: "Хороший",
+              cls: "good",
+              text: "Выше среднего. Отличная форма.",
+            };
+          if (idx >= 80)
+            return { label: "Норма", cls: "warn", text: "В пределах нормы." };
+          return {
+            label: "Сниженный",
+            cls: "bad",
+            text: "Ниже обычного — возможна усталость/стресс.",
+          };
+        }
+        function gradeRT(medianRt, falseStarts) {
+          if (!medianRt)
+            return { label: "—", cls: "warn", text: "Недостаточно данных." };
+          let base;
+          if (medianRt <= 250)
+            base = {
+              label: "Отлично",
+              cls: "good",
+              text: "Очень быстрые реакции.",
+            };
+          else if (medianRt <= 320)
+            base = {
+              label: "Хорошо",
+              cls: "good",
+              text: "Хорошая скорость реакции.",
+            };
+          else if (medianRt <= 450)
+            base = {
+              label: "Средне",
+              cls: "warn",
+              text: "Умеренная скорость.",
+            };
+          else
+            base = {
+              label: "Ниже нормы",
+              cls: "bad",
+              text: "Замедленная реакция.",
+            };
+          if (falseStarts >= 2) {
+            base.text += " Много ложных стартов.";
+            if (base.cls === "good") base.cls = "warn";
+          }
+          return base;
+        }
+        function gradeNBack1(acc, falseAlarms, meanRt) {
+          if (acc == null)
+            return { label: "—", cls: "warn", text: "Недостаточно данных." };
+          let base;
+          if (acc >= 0.9)
+            base = {
+              label: "Отлично",
+              cls: "good",
+              text: "Высокая точность 1-back.",
+            };
+          else if (acc >= 0.8)
+            base = { label: "Хорошо", cls: "good", text: "Хорошая точность." };
+          else if (acc >= 0.65)
+            base = { label: "Средне", cls: "warn", text: "Средняя точность." };
+          else
+            base = {
+              label: "Ниже нормы",
+              cls: "bad",
+              text: "Низкая точность.",
+            };
+          if (falseAlarms >= 3) {
+            base.text += " Много ложных тревог.";
+            if (base.cls === "good") base.cls = "warn";
+          }
+          if (meanRt && meanRt > 450) {
+            base.text += " Время реакции на цели высокое.";
+            if (base.cls === "good") base.cls = "warn";
+          }
+          return base;
+        }
+        function gradeGrid30(ms, errors) {
+          if (!ms)
+            return { label: "—", cls: "warn", text: "Недостаточно данных." };
+          const s = ms / 1000;
+          let base;
+          if (s <= 55)
+            base = {
+              label: "Отлично",
+              cls: "good",
+              text: "Быстрый поиск/переключение внимания.",
+            };
+          else if (s <= 80)
+            base = { label: "Хорошо", cls: "good", text: "Хороший темп." };
+          else if (s <= 120)
+            base = { label: "Средне", cls: "warn", text: "Среднее время." };
+          else
+            base = {
+              label: "Ниже нормы",
+              cls: "bad",
+              text: "Медленно — вероятная усталость/отвлечения.",
+            };
+          if (errors >= 3) {
+            base.text += " Много ошибок.";
+            if (base.cls === "good") base.cls = "warn";
+          }
+          return base;
+        }
+        function gradeStroop(acc, meanRt, interf) {
+          if (acc == null)
+            return { label: "—", cls: "warn", text: "Недостаточно данных." };
+          let base;
+          if (acc >= 0.95)
+            base = {
+              label: "Отлично",
+              cls: "good",
+              text: "Высокий контроль интерференции.",
+            };
+          else if (acc >= 0.85)
+            base = { label: "Хорошо", cls: "good", text: "Хороший контроль." };
+          else if (acc >= 0.7)
+            base = { label: "Средне", cls: "warn", text: "Средний контроль." };
+          else
+            base = {
+              label: "Ниже нормы",
+              cls: "bad",
+              text: "Сниженный контроль, возможна утомляемость.",
+            };
+          if (interf >= 120) {
+            base.text += " Большая интерференция.";
+            if (base.cls === "good") base.cls = "warn";
+          }
+          if (meanRt && meanRt > 800) {
+            base.text += " Медленные верные ответы.";
+            if (base.cls === "good") base.cls = "warn";
+          }
+          return base;
+        }
+
+        function renderHelpHtml(last) {
+          const how = `
+          <h4>Как проходить (лучшие практики)</h4>
+          <ul>
+            <li><b>Одинаковые условия:</b> тишина, схожее время суток, одинаковая поза/экран.</li>
+            <li><b>Реакция:</b> ждите круг и нажимайте быстро, не кликайте заранее.</li>
+            <li><b>1-back:</b> жмите, если текущая буква = букве на <u>1 позицию назад</u> (предыдущей).</li>
+            <li><b>1..30:</b> кликайте числа по порядку; ошибка — клик не по порядку.</li>
+            <li><b>Струп:</b> выбирайте цвет чернил, игнорируйте текст; R/G/B/Y — горячие клавиши.</li>
+            <li><b>Анализ:</b> смотрите на свою динамику, а не на абсолютные цифры.</li>
+          </ul>
+        `;
+          if (!last) {
+            return `
+            ${how}
+            <h4>Пороговые ориентиры</h4>
+            <ul>
+              <li><b>Индекс</b>: <span class="pill bad">Сниж. &lt;80</span> <span class="pill warn">Норма 80–94</span> <span class="pill good">Хороший ≥95</span></li>
+              <li><b>RT</b>: ≤250 отлично; 251–320 хорошо; 321–450 средне; &gt;450 ниже нормы.</li>
+              <li><b>1-back</b>: ≥90% отлично; 80–89% хорошо; 65–79% средне; &lt;65% ниже нормы.</li>
+              <li><b>1..30</b>: ≤55s отлично; 56–80s хорошо; 81–120s средне; &gt;120s ниже нормы.</li>
+              <li><b>Струп</b>: acc ≥95% отлично; 85–94% хорошо; 70–84% средне; интерференция меньше — лучше.</li>
+            </ul>
+            <div class="hint">Примечание: это инструмент самоконтроля, не медицинская диагностика.</div>
+          `;
+          }
+          const idx = last.index ?? 0;
+          const gi = gradeIndex(idx);
+          const rt = last.tests?.find((t) => t.type === "rt")?.metrics;
+          const nb = last.tests?.find((t) => t.type === "nback1")?.metrics;
+          const g3 = last.tests?.find((t) => t.type === "grid30")?.metrics;
+          const st = last.tests?.find((t) => t.type === "stroop")?.metrics;
+
+          const grt = rt
+            ? gradeRT(rt.medianRt, rt.falseStarts)
+            : { label: "—", cls: "warn", text: "Нет данных" };
+          const gnb = nb
+            ? gradeNBack1(nb.accuracy, nb.falseAlarms, nb.meanRtOnHits)
+            : { label: "—", cls: "warn", text: "Нет данных" };
+          const ggd = g3
+            ? gradeGrid30(g3.totalTimeMs, g3.errors)
+            : { label: "—", cls: "warn", text: "Нет данных" };
+          const gst = st
+            ? gradeStroop(st.accuracy, st.meanRtCorrect, st.interferenceMs)
+            : { label: "—", cls: "warn", text: "Нет данных" };
+
+          return `
+          ${how}
+          <h4>Ваша последняя сессия</h4>
+          <div class="kpi">
+            <div class="pill ${gi.cls}">Индекс: ${idx} — ${gi.label}</div>
+            ${
+              rt
+                ? `<div class="pill ${grt.cls}">RT: мед. ${Math.round(
+                    rt.medianRt
+                  )}ms, ЛС ${rt.falseStarts} — ${grt.label}</div>`
+                : ""
+            }
+            ${
+              nb
+                ? `<div class="pill ${gnb.cls}">1-back: ${Math.round(
+                    nb.accuracy * 100
+                  )}% acc, ЛТ ${nb.falseAlarms}, RThit ${
+                    nb.meanRtOnHits || 0
+                  }ms — ${gnb.label}</div>`
+                : ""
+            }
+            ${
+              g3
+                ? `<div class="pill ${ggd.cls}">1..30: ${fmtSec1(
+                    g3.totalTimeMs
+                  )}, Ошибки ${g3.errors} — ${ggd.label}</div>`
+                : ""
+            }
+            ${
+              st
+                ? `<div class="pill ${gst.cls}">Струп: ${Math.round(
+                    st.accuracy * 100
+                  )}% acc, RT ${st.meanRtCorrect || 0}ms, Интерф. ${
+                    st.interferenceMs || 0
+                  }ms — ${gst.label}</div>`
+                : ""
+            }
+          </div>
+
+          <h4>Пороговые ориентиры</h4>
+          <ul>
+            <li><b>Индекс</b>: <span class="pill bad">Сниж. &lt;80</span> <span class="pill warn">Норма 80–94</span> <span class="pill good">Хороший ≥95</span></li>
+            <li><b>RT</b>: ≤250 отлично; 251–320 хорошо; 321–450 средне; &gt;450 ниже нормы.</li>
+            <li><b>1-back</b>: ≥90% отлично; 80–89% хорошо; 65–79% средне; &lt;65% ниже нормы.</li>
+            <li><b>1..30</b>: ≤55s отлично; 56–80s хорошо; 81–120s средне; &gt;120s ниже нормы.</li>
+            <li><b>Струп</b>: acc ≥95% отлично; 85–94% хорошо; 70–84% средне; интерференция меньше — лучше.</li>
+          </ul>
+          <div class="hint">Инструмент самоконтроля, не медицинская диагностика.</div>
+        `;
+        }
+
+        function openHelp() {
+          const sessions = loadSessions();
+          const last = sessions[0];
+          helpContent.innerHTML = renderHelpHtml(last);
+          helpModal.hidden = false;
+        }
+        function closeHelp() {
+          helpModal.hidden = true;
+        }
+
+        // ============ Движок сессии ============
+
+        async function runSession() {
+          session = {
+            id: `${Date.now()}-${randInt(0, 1e6)}`,
+            version: VERSION,
+            startedAt: nowIso(),
+            finishedAt: null,
+            device: {
+              ua: navigator.userAgent,
+              platform: navigator.platform,
+              dpr: window.devicePixelRatio || 1,
+            },
+            tests: [],
+          };
+          setControlsState({ started: true, paused: false });
+          timerReset();
+          timerStartRun();
+
+          try {
+            // 1) Реакция (12 попыток) — без изменений
+            setStatus("Подготовка теста реакции...");
+            const rt = await runRTLongTest();
+            session.tests.push({ type: "rt", metrics: rt });
+
+            await smallBreak("Пауза 2s перед 1-back...");
+            // 2) 1-back
+            const nb1 = await runOneBackTest();
+            session.tests.push({ type: "nback1", metrics: nb1 });
+
+            await smallBreak("Пауза 2s перед таблицей 1..30...");
+            // 3) Таблица 1..30
+            const g30 = await runGrid30Test();
+            session.tests.push({ type: "grid30", metrics: g30 });
+
+            await smallBreak("Пауза 2s перед Струп...");
+            // 4) Струп — без изменений
+            const st = await runStroopTest();
+            session.tests.push({ type: "stroop", metrics: st });
+
+            // Финал
+            session.finishedAt = nowIso();
+            const rtM = session.tests.find((t) => t.type === "rt")?.metrics;
+            const nbM = session.tests.find((t) => t.type === "nback1")?.metrics;
+            const g3M = session.tests.find((t) => t.type === "grid30")?.metrics;
+            const stM = session.tests.find((t) => t.type === "stroop")?.metrics;
+            session.index = computeIndex(rtM, nbM, g3M, stM);
+
+            saveSession(session);
+            setStatus(
+              `Сессия завершена. Индекс: ${session.index}. Результаты сохранены.`
+            );
+            announce("Сессия завершена");
+            renderHistory();
+          } catch (e) {
+            setStatus("Сессия прервана.");
+          } finally {
+            timerPause();
+            setControlsState({ started: false, paused: false });
+            showOnly(null);
+            session = null;
+            cancelCurrentTest = null;
+          }
+
+          async function smallBreak(text) {
+            setStatus(text);
+            await new Promise((r) => setTimeout(r, 2000));
+          }
+        }
+
+        // ============ Обработчики кнопок ============
+
+        startBtn.addEventListener("click", () => {
+          if (session) return;
+          setInstructions(
+            "Идут задания. Можно поставить на паузу/пропустить текущий субтест."
+          );
+          runSession();
+        });
+        pauseBtn.addEventListener("click", () => {
+          if (!session) return;
+          if (timerRunning) {
+            timerPause();
+            setControlsState({ started: true, paused: true });
+            setStatus("Пауза.");
+            announce("Пауза");
+          } else {
+            timerStartRun();
+            setControlsState({ started: true, paused: false });
+            setStatus("Продолжили.");
+            announce("Продолжили");
+          }
+        });
+        skipBtn.addEventListener("click", () => {
+          if (!session || !cancelCurrentTest) return;
+          setStatus("Текущий субтест пропущен.");
+          cancelCurrentTest();
+        });
+        stopBtn.addEventListener("click", () => {
+          if (!session) return;
+          if (cancelCurrentTest) cancelCurrentTest();
+          timerPause();
+          setControlsState({ started: false, paused: false });
+          setStatus("Сессия остановлена.");
+          showOnly(null);
+          session = null;
+          cancelCurrentTest = null;
+        });
+
+        helpBtn.addEventListener("click", openHelp);
+        helpClose.addEventListener("click", closeHelp);
+        helpModal.addEventListener("click", (e) => {
+          if (e.target === helpModal) closeHelp();
+        });
+        window.addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && !helpModal.hidden) closeHelp();
+        });
+
+        exportBtn.addEventListener("click", exportSessions);
+        clearBtn.addEventListener("click", clearHistory);
+
+        // ============ Инициализация ============
+
+        renderHistory();
+        setStatus("Готов к запуску.");
+
+        // локальная утилита sleep
+        function sleep(ms) {
+          return new Promise((r) => setTimeout(r, ms));
+        }
+      })();
+    </script>
+  </body>
+</html>

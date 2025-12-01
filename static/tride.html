@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>STL Viewer с тенью (локально, ESM + import map)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #0f1115;
+      }
+      #app {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+      }
+      #ui {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        display: flex;
+        gap: 8px;
+        z-index: 10;
+      }
+      button {
+        background: #2d6cdf;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 10px 14px;
+        cursor: pointer;
+        font-size: 14px;
+      }
+      button:hover {
+        background: #1f56b6;
+      }
+      #hint {
+        position: absolute;
+        bottom: 12px;
+        left: 12px;
+        color: #c9d1d9;
+        font: 12px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial,
+          sans-serif;
+        opacity: 0.85;
+        background: rgba(0, 0, 0, 0.25);
+        padding: 6px 8px;
+        border-radius: 6px;
+        user-select: none;
+      }
+    </style>
+
+    <!-- Polyfill для import maps в большинстве браузеров -->
+    <script
+      async
+      src="https://cdn.jsdelivr.net/npm/es-module-shims@1.10.0/dist/es-module-shims.min.js"></script>
+
+    <!-- Import map: сопоставляем “голые” спецификаторы реальным URL -->
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+          "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app">
+      <div id="ui">
+        <button id="openBtn" type="button">Добавить модель (STL)</button>
+        <input
+          id="fileInput"
+          type="file"
+          accept=".stl,model/stl"
+          style="display: none" />
+      </div>
+      <div id="hint">
+        ЛКМ — вращение, Колесо — зум, ПКМ/Shift+ЛКМ — панорамирование
+      </div>
+    </div>
+
+    <script type="module">
+      import * as THREE from "three";
+      import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+      import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
+
+      const app = document.getElementById("app");
+      const fileInput = document.getElementById("fileInput");
+      const openBtn = document.getElementById("openBtn");
+
+      // Сцена
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0f1115);
+
+      // Камера
+      const camera = new THREE.PerspectiveCamera(
+        45,
+        window.innerWidth / window.innerHeight,
+        0.1,
+        10000
+      );
+      camera.position.set(0, 1.25, 5);
+
+      // Рендерер
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        powerPreference: "high-performance",
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.outputColorSpace = THREE.SRGBColorSpace;
+      app.appendChild(renderer.domElement);
+
+      // Контролы камеры
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.08;
+      controls.minDistance = 0.1;
+      controls.maxDistance = 10000;
+
+      // Свет
+      const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4);
+      hemi.position.set(0, 1, 0);
+      scene.add(hemi);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+      dirLight.position.set(5, 10, 5);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.set(2048, 2048);
+      const shadowCam = dirLight.shadow.camera;
+      shadowCam.near = 0.5;
+      shadowCam.far = 50;
+      shadowCam.left = -10;
+      shadowCam.right = 10;
+      shadowCam.top = 10;
+      shadowCam.bottom = -10;
+      scene.add(dirLight);
+
+      // Пол для приёма теней
+      const groundGeo = new THREE.PlaneGeometry(200, 200);
+      const groundMat = new THREE.MeshStandardMaterial({
+        color: 0x0b0d12,
+        roughness: 1,
+        metalness: 0,
+      });
+      const ground = new THREE.Mesh(groundGeo, groundMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = -0.001;
+      ground.receiveShadow = true;
+      scene.add(ground);
+
+      // Текущая модель
+      let current = {
+        mesh: null,
+        dispose() {
+          if (this.mesh) {
+            scene.remove(this.mesh);
+            if (this.mesh.geometry) this.mesh.geometry.dispose();
+            if (this.mesh.material) this.mesh.material.dispose();
+            this.mesh = null;
+          }
+        },
+      };
+
+      const stlLoader = new STLLoader();
+
+      // Кнопка "Добавить модель"
+      openBtn.addEventListener("click", () => fileInput.click());
+
+      // Загрузка выбранного файла
+      fileInput.addEventListener("change", async (e) => {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        try {
+          await loadStlFile(file);
+        } catch (err) {
+          console.error("Ошибка загрузки STL:", err);
+          alert("Не удалось загрузить STL. Подробности в консоли.");
+        } finally {
+          fileInput.value = "";
+        }
+      });
+
+      async function loadStlFile(file) {
+        const arrayBuffer = await file.arrayBuffer();
+        const geometry = stlLoader.parse(arrayBuffer);
+
+        // Нормали и центрирование для корректного освещения и управления
+        geometry.computeVertexNormals();
+        geometry.center();
+        geometry.computeBoundingSphere();
+
+        const material = new THREE.MeshStandardMaterial({
+          color: 0xb0c4de,
+          metalness: 0.05,
+          roughness: 0.7,
+        });
+
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.castShadow = true;
+        mesh.receiveShadow = false;
+        scene.add(mesh);
+
+        // Удалим предыдущую модель
+        current.dispose();
+        current.mesh = mesh;
+
+        // Автокадрирование
+        const { center, radius } = geometry.boundingSphere;
+        controls.target.copy(center);
+
+        const fov = camera.fov * (Math.PI / 180);
+        const distance = radius / Math.sin(fov / 2);
+        const offset = new THREE.Vector3(0, radius * 0.5, distance * 1.05);
+
+        camera.near = Math.max(0.01, radius / 100);
+        camera.far = Math.max(50, radius * 50);
+        camera.updateProjectionMatrix();
+
+        camera.position.copy(center).add(offset);
+
+        // Свет и область тени под размер модели
+        dirLight.position
+          .copy(center)
+          .add(new THREE.Vector3(radius * 0.8, radius * 2.0, radius * 0.8));
+        dirLight.target.position.copy(center);
+        scene.add(dirLight.target);
+
+        const s = Math.max(5, radius * 2);
+        shadowCam.left = -s;
+        shadowCam.right = s;
+        shadowCam.top = s;
+        shadowCam.bottom = -s;
+        shadowCam.near = 0.1;
+        shadowCam.far = radius * 10 + 10;
+        dirLight.shadow.camera.updateProjectionMatrix();
+
+        // Пол под модель
+        ground.position.y = center.y - radius - 0.001;
+      }
+
+      // Ресайз
+      window.addEventListener("resize", onResize, { passive: true });
+      function onResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      // Рендер-цикл
+      renderer.setAnimationLoop(() => {
+        controls.update();
+        renderer.render(scene, camera);
+      });
+    </script>
+  </body>
+</html>
