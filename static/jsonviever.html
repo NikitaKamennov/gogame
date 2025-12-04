@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>JSON Parser / Viewer (Dark VS Code-like)</title>
+
+  <!-- JSONEditor CSS (для древовидного представления справа) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/jsoneditor@9.10.0/dist/jsoneditor.min.css">
+
+  <style>
+    /* Базовые CSS-переменные для светлой/тёмной темы */
+    :root {
+      --bg: #1e1e1e;
+      --bg-panel: #252526;
+      --bg-toolbar: #2d2d30;
+      --border: #3c3c3c;
+      --text: #d4d4d4;
+      --muted: #aaaaaa;
+      --accent: #0e639c;
+      --btn: #3a3d41;
+      --btn-hover: #45494e;
+      --input-bg: #1e1e1e;
+      --input-border: #3c3c3c;
+      --search-highlight: #264f78;
+      --status-ok: #3bb26b;
+      --status-err: #d16969;
+    }
+    body.theme-light {
+      --bg: #ffffff;
+      --bg-panel: #f5f5f5;
+      --bg-toolbar: #f3f3f3;
+      --border: #e0e0e0;
+      --text: #1f1f1f;
+      --muted: #5e5e5e;
+      --accent: #0066cc;
+      --btn: #e8e8e8;
+      --btn-hover: #dedede;
+      --input-bg: #ffffff;
+      --input-border: #dcdcdc;
+      --search-highlight: #cfe8ff;
+      --status-ok: #22863a;
+      --status-err: #b31d28;
+    }
+
+    /* Базовая раскладка */
+    html, body {
+      height: 100%;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      background: var(--bg-toolbar);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+    .toolbar .group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      border-right: 1px solid var(--border);
+      padding-right: 10px;
+      margin-right: 10px;
+    }
+    .toolbar label {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .toolbar input[type="text"] {
+      background: var(--input-bg);
+      color: var(--text);
+      border: 1px solid var(--input-border);
+      border-radius: 4px;
+      padding: 6px 8px;
+      min-width: 220px;
+      outline: none;
+    }
+    .toolbar select {
+      background: var(--input-bg);
+      color: var(--text);
+      border: 1px solid var(--input-border);
+      border-radius: 4px;
+      padding: 6px 8px;
+      outline: none;
+    }
+    .btn {
+      background: var(--btn);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 13px;
+    }
+    .btn:hover {
+      background: var(--btn-hover);
+    }
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .checkbox {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .status {
+      margin-left: auto;
+      font-size: 12px;
+    }
+    .status.ok { color: var(--status-ok); }
+    .status.err { color: var(--status-err); }
+
+    .container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      height: calc(100% - 56px); /* 56px ~ высота тулбара */
+      padding: 8px;
+      box-sizing: border-box;
+    }
+    .pane {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      border: 1px solid var(--border);
+      background: var(--bg-panel);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .pane-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--bg-panel);
+    }
+    .pane-body {
+      flex: 1;
+      min-height: 0;
+      position: relative;
+      background: var(--bg);
+    }
+
+    /* Контейнеры редакторов */
+    #leftEditor, #rightEditorTree, #rightEditorRaw {
+      position: absolute;
+      inset: 0;
+    }
+
+    /* JSONEditor тёмная тема подкрутка под общий фон */
+    .jsoneditor, .jsoneditor-tree, .jsoneditor-menu, .jsoneditor-contextmenu, .jsoneditor-modal, .jsoneditor-navigation-bar {
+      background: var(--bg-panel) !important;
+      color: var(--text) !important;
+      border-color: var(--border) !important;
+    }
+    .jsoneditor-search input, .jsoneditor-frame, .jsoneditor-field, .jsoneditor-value {
+      color: var(--text) !important;
+    }
+    .jsoneditor-field, .jsoneditor-value {
+      background: var(--bg) !important;
+    }
+    .jsoneditor-field[contenteditable="true"], .jsoneditor-value[contenteditable="true"] {
+      outline-color: var(--accent) !important;
+    }
+    .jsoneditor .jsoneditor-readonly {
+      color: var(--muted) !important;
+    }
+    .jsoneditor .jsoneditor-separator, .jsoneditor .jsoneditor-button {
+      border-color: var(--border) !important;
+    }
+    .jsoneditor-selected, .jsoneditor-highlight {
+      background: var(--search-highlight) !important;
+    }
+    .jsoneditor-menu {
+      border-bottom: 1px solid var(--border) !important;
+    }
+
+    /* Скрытый input для загрузки файла */
+    #fileInput {
+      display: none;
+    }
+
+    /* Адаптив */
+    @media (max-width: 1100px) {
+      .container {
+        grid-template-columns: 1fr;
+        height: auto;
+      }
+      .pane {
+        height: 50vh;
+      }
+    }
+  </style>
+</head>
+<body class="theme-dark">
+  <div class="toolbar">
+    <!-- Переключатель темы -->
+    <div class="group">
+      <button id="themeToggle" class="btn" title="Переключить тему (светлая/тёмная)">🌙 Тема</button>
+      <label id="themeLabel">Тёмная</label>
+    </div>
+
+    <!-- Поиск по правому окну (дерево или raw) -->
+    <div class="group">
+      <label for="search">Поиск:</label>
+      <input id="search" type="text" placeholder="Введите строку и нажмите Enter" />
+      <button id="searchPrev" class="btn">Назад</button>
+      <button id="searchNext" class="btn">Вперёд</button>
+      <span id="searchCount" class="muted" style="color: var(--muted); font-size: 12px;"></span>
+    </div>
+
+    <!-- Представление справа -->
+    <div class="group">
+      <label for="viewMode">Представление:</label>
+      <select id="viewMode">
+        <option value="tree">Дерево</option>
+        <option value="raw">Raw (JSON)</option>
+      </select>
+      <button id="expandAll" class="btn">Развернуть</button>
+      <button id="collapseAll" class="btn">Свернуть</button>
+    </div>
+
+    <!-- Трансформации, IO -->
+    <div class="group">
+      <label class="checkbox">
+        <input id="sortKeys" type="checkbox" />
+        Сортировать ключи
+      </label>
+      <button id="formatBtn" class="btn">Форматировать</button>
+      <button id="minifyBtn" class="btn">Минифицировать</button>
+      <button id="copyBtn" class="btn">Копировать</button>
+      <button id="loadBtn" class="btn">Загрузить файл</button>
+      <button id="downloadBtn" class="btn primary">Скачать JSON</button>
+      <input id="fileInput" type="file" accept=".json,application/json" />
+    </div>
+
+    <!-- Статус валидации -->
+    <div id="status" class="status">—</div>
+  </div>
+
+  <div class="container">
+    <!-- Левый редактор (Monaco, editable) -->
+    <div class="pane">
+      <div class="pane-header">
+        <div>Ввод JSON (редактируемый)</div>
+        <div style="color: var(--muted);">Ctrl+F — поиск в левой панели</div>
+      </div>
+      <div class="pane-body">
+        <div id="leftEditor" aria-label="JSON input editor"></div>
+      </div>
+    </div>
+
+    <!-- Правый редактор (Tree / Raw) -->
+    <div class="pane">
+      <div class="pane-header">
+        <div>Преобразованный JSON (дерево или raw)</div>
+        <div id="rightInfo" style="color: var(--muted);">Дерево</div>
+      </div>
+      <div class="pane-body">
+        <div id="rightEditorTree" aria-label="JSON tree viewer"></div>
+        <div id="rightEditorRaw" aria-label="JSON raw viewer" style="display: none;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- JSONEditor (дерево) -->
+  <script src="https://cdn.jsdelivr.net/npm/jsoneditor@9.10.0/dist/jsoneditor.min.js"></script>
+
+  <!-- Monaco (VS Code editor) через AMD loader -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+
+  <script>
+    // ---------------------------------------------
+    // Утилиты
+    // ---------------------------------------------
+    const debounce = (fn, ms = 300) => {
+      let t;
+      return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), ms);
+      };
+    };
+
+    // Рекурсивная сортировка ключей объектов — детерминированный вывод
+    function sortKeysDeep(value) {
+      if (Array.isArray(value)) {
+        return value.map(sortKeysDeep);
+      }
+      if (value && typeof value === 'object' && Object.prototype.toString.call(value) === '[object Object]') {
+        const out = {};
+        Object.keys(value).sort((a, b) => a.localeCompare(b)).forEach(k => {
+          out[k] = sortKeysDeep(value[k]);
+        });
+        return out;
+      }
+      return value;
+    }
+
+    // ---------------------------------------------
+    // Тема
+    // ---------------------------------------------
+    const THEME_DARK = 'dark';
+    const THEME_LIGHT = 'light';
+    let currentTheme = localStorage.getItem('json-viewer-theme') || THEME_DARK;
+
+    function applyTheme(theme) {
+      document.body.classList.toggle('theme-dark', theme === THEME_DARK);
+      document.body.classList.toggle('theme-light', theme === THEME_LIGHT);
+      const label = document.getElementById('themeLabel');
+      label.textContent = theme === THEME_DARK ? 'Тёмная' : 'Светлая';
+
+      if (window.monaco) {
+        monaco.editor.setTheme(theme === THEME_DARK ? 'vs-dark' : 'vs');
+      }
+    }
+
+    // ---------------------------------------------
+    // Глобальные редакторы и состояние
+    // ---------------------------------------------
+    let leftEditor;         // Monaco (editable)
+    let rightRawEditor;     // Monaco (read-only)
+    let rightTreeEditor;    // JSONEditor (tree)
+    let lastValidJSON = null;
+
+    // Поиск по правой панели
+    let rightSearchResults = [];
+    let rightSearchIndex = -1;
+
+    // ---------------------------------------------
+    // Инициализация Monaco (через AMD)
+    // ---------------------------------------------
+    // Воркер для Monaco (обход CSP/корс)
+    const monacoWorkerProxy = URL.createObjectURL(
+      new Blob([`
+        self.MonacoEnvironment = {
+          baseUrl: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/'
+        };
+        importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/base/worker/workerMain.js');
+      `], { type: 'text/javascript' })
+    );
+    window.MonacoEnvironment = {
+      getWorkerUrl: () => monacoWorkerProxy
+    };
+
+    require.config({
+      paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' }
+    });
+
+    require(['vs/editor/editor.main'], () => {
+      initEditors();
+    });
+
+    // ---------------------------------------------
+    // Инициализация редакторов
+    // ---------------------------------------------
+    function initEditors() {
+      applyTheme(currentTheme);
+
+      // Левый Monaco (редактируемый)
+      leftEditor = monaco.editor.create(document.getElementById('leftEditor'), {
+        value: getInitialSample(),
+        language: 'json',
+        theme: currentTheme === THEME_DARK ? 'vs-dark' : 'vs',
+        automaticLayout: true,
+        minimap: { enabled: false },
+        scrollBeyondLastLine: false,
+        formatOnPaste: true,
+        formatOnType: true,
+        wordWrap: 'off',
+      });
+
+      // Правый Monaco (raw, read-only)
+      rightRawEditor = monaco.editor.create(document.getElementById('rightEditorRaw'), {
+        value: '',
+        language: 'json',
+        theme: currentTheme === THEME_DARK ? 'vs-dark' : 'vs',
+        automaticLayout: true,
+        minimap: { enabled: false },
+        readOnly: true,
+        wordWrap: 'off',
+        scrollBeyondLastLine: false,
+      });
+
+      // Правый JSONEditor (tree)
+      rightTreeEditor = new JSONEditor(document.getElementById('rightEditorTree'), {
+        mode: 'tree',
+        mainMenuBar: false,
+        navigationBar: false,
+        statusBar: false,
+        onChange: () => {
+          // Редактирование в дереве не синхронизируем назад по умолчанию, чтобы не путать потоки правок.
+          // При необходимости можно включить правки в дереве и синкнуть влево.
+        }
+      });
+
+      // Первичная синхронизация
+      syncRightNow();
+
+      // Дебаунс синхронизации при вводе
+      leftEditor.onDidChangeModelContent(debounce(() => {
+        syncRightNow();
+      }, 300));
+
+      // Горячая клавиша форматирования (Ctrl/Cmd + Shift + F — Monaco built-in)
+      // Оставляем дефолтный обработчик Monaco.
+
+      // Вешаем обработчики UI
+      initUI();
+    }
+
+    function getInitialSample() {
+      return `{
+  "offer_id": "rv24",
+  "product_id": 34456841,
+  "stocks": [
+    { "sku": 192625186, "type": "fbo",  "present": 79, "reserved": 0, "shipment_type": "SHIPMENT_TYPE_GENERAL", "warehouse_ids": [] },
+    { "sku": 192625186, "type": "fbs",  "present": 20, "reserved": 0, "shipment_type": "SHIPMENT_TYPE_GENERAL", "warehouse_ids": [] },
+    { "sku": 192625186, "type": "rfbs", "present":  0, "reserved": 0, "shipment_type": "SHIPMENT_TYPE_GENERAL", "warehouse_ids": [] }
+  ]
+}`;
+    }
+
+    // ---------------------------------------------
+    // Синхронизация правой панели
+    // ---------------------------------------------
+    function setStatus(text, ok = true) {
+      const el = document.getElementById('status');
+      el.textContent = text;
+      el.classList.toggle('ok', ok);
+      el.classList.toggle('err', !ok);
+    }
+
+    function safeParse(text) {
+      try {
+        return { ok: true, value: JSON.parse(text) };
+      } catch (e) {
+        return { ok: false, error: e };
+      }
+    }
+
+    function applyTransformations(json) {
+      const sort = document.getElementById('sortKeys').checked;
+      return sort ? sortKeysDeep(json) : json;
+    }
+
+    function syncRightNow() {
+      const text = leftEditor.getValue();
+      const parsed = safeParse(text);
+      if (!parsed.ok) {
+        setStatus(parsed.error.message, false);
+        // Не трогаем правую панель, пока JSON невалиден
+        return;
+      }
+
+      const transformed = applyTransformations(parsed.value);
+      lastValidJSON = transformed;
+
+      // Обновляем дерево
+      try {
+        rightTreeEditor.update(tranformedClone(transformed));
+      } catch {
+        // Если первый раз — используем set
+        rightTreeEditor.set(tranformedClone(transformed));
+      }
+
+      // Обновляем raw
+      const pretty = JSON.stringify(transformed, null, 2);
+      rightRawEditor.setValue(pretty);
+
+      setStatus('JSON валиден', true);
+
+      // Обновляем результаты поиска для правой панели (если есть запрос)
+      const q = document.getElementById('search').value.trim();
+      if (q) {
+        performRightSearch(q, true);
+      } else {
+        clearRightSearch();
+      }
+    }
+
+    // JSONEditor мутирует объект, поэтому обновляем через глубокий клон
+    function tranformedClone(obj) {
+      return obj === undefined ? undefined : JSON.parse(JSON.stringify(obj));
+    }
+
+    // ---------------------------------------------
+    // Поиск по правой панели (дерево или raw)
+    // ---------------------------------------------
+    function rightViewMode() {
+      return document.getElementById('viewMode').value; // 'tree' | 'raw'
+    }
+
+    function performRightSearch(query, resetIndex = false) {
+      const mode = rightViewMode();
+      if (mode === 'tree') {
+        // JSONEditor: вернёт массив результатов
+        rightSearchResults = rightTreeEditor.search(query) || [];
+        if (resetIndex) rightSearchIndex = rightSearchResults.length ? 0 : -1;
+        if (rightSearchIndex >= 0) {
+          rightTreeEditor.setSelection(rightSearchResults[rightSearchIndex]);
+          rightTreeEditor.scrollTo(rightSearchResults[rightSearchIndex]);
+        }
+        updateSearchCounter();
+      } else {
+        // Monaco (raw)
+        const model = rightRawEditor.getModel();
+        rightSearchResults = query
+          ? model.findMatches(query, false, true, false, null, true)
+          : [];
+        if (resetIndex) rightSearchIndex = rightSearchResults.length ? 0 : -1;
+        if (rightSearchIndex >= 0) {
+          const match = rightSearchResults[rightSearchIndex];
+          rightRawEditor.setSelection(match.range);
+          rightRawEditor.revealRangeInCenter(match.range);
+        }
+        updateSearchCounter();
+      }
+    }
+
+    function updateSearchCounter() {
+      const info = document.getElementById('searchCount');
+      if (!rightSearchResults || rightSearchResults.length === 0) {
+        info.textContent = '';
+      } else {
+        info.textContent = `${rightSearchIndex + 1} / ${rightSearchResults.length}`;
+      }
+    }
+
+    function clearRightSearch() {
+      rightSearchResults = [];
+      rightSearchIndex = -1;
+      updateSearchCounter();
+      if (rightViewMode() === 'tree') {
+        // JSONEditor сам убирает подсветку при пустом поиске
+        rightTreeEditor.search('');
+      } else {
+        rightRawEditor.setSelection(new monaco.Range(1,1,1,1));
+      }
+    }
+
+    function navRightSearch(delta) {
+      if (!rightSearchResults || rightSearchResults.length === 0) return;
+      rightSearchIndex = (rightSearchIndex + delta + rightSearchResults.length) % rightSearchResults.length;
+
+      const mode = rightViewMode();
+      if (mode === 'tree') {
+        rightTreeEditor.setSelection(rightSearchResults[rightSearchIndex]);
+        rightTreeEditor.scrollTo(rightSearchResults[rightSearchIndex]);
+      } else {
+        const match = rightSearchResults[rightSearchIndex];
+        rightRawEditor.setSelection(match.range);
+        rightRawEditor.revealRangeInCenter(match.range);
+      }
+      updateSearchCounter();
+    }
+
+    // ---------------------------------------------
+    // UI обработчики
+    // ---------------------------------------------
+    function initUI() {
+      // Тема
+      document.getElementById('themeToggle').addEventListener('click', () => {
+        currentTheme = currentTheme === THEME_DARK ? THEME_LIGHT : THEME_DARK;
+        localStorage.setItem('json-viewer-theme', currentTheme);
+        applyTheme(currentTheme);
+      });
+
+      // Поиск
+      const searchInput = document.getElementById('search');
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          const q = searchInput.value.trim();
+          if (q) performRightSearch(q, true);
+          else clearRightSearch();
+        }
+      });
+      document.getElementById('searchPrev').addEventListener('click', () => navRightSearch(-1));
+      document.getElementById('searchNext').addEventListener('click', () => navRightSearch(1));
+
+      // Представление справа
+      const viewSelect = document.getElementById('viewMode');
+      viewSelect.addEventListener('change', () => {
+        const mode = viewSelect.value;
+        const tree = document.getElementById('rightEditorTree');
+        const raw  = document.getElementById('rightEditorRaw');
+        const info = document.getElementById('rightInfo');
+
+        if (mode === 'tree') {
+          tree.style.display = '';
+          raw.style.display  = 'none';
+          info.textContent = 'Дерево';
+        } else {
+          tree.style.display = 'none';
+          raw.style.display  = '';
+          info.textContent = 'Raw';
+        }
+
+        // Пересчитать поиск
+        const q = document.getElementById('search').value.trim();
+        if (q) performRightSearch(q, true);
+        else clearRightSearch();
+      });
+
+      // Свернуть/развернуть (только для дерева)
+      document.getElementById('expandAll').addEventListener('click', () => {
+        if (rightViewMode() === 'tree') rightTreeEditor.expandAll();
+      });
+      document.getElementById('collapseAll').addEventListener('click', () => {
+        if (rightViewMode() === 'tree') rightTreeEditor.collapseAll();
+      });
+
+      // Сортировка ключей: просто пересинхронизируем
+      document.getElementById('sortKeys').addEventListener('change', () => {
+        syncRightNow();
+      });
+
+      // Форматирование (Monaco умеет сам)
+      document.getElementById('formatBtn').addEventListener('click', async () => {
+        try {
+          await leftEditor.getAction('editor.action.formatDocument').run();
+        } catch {
+          // Fallback: JSON.parse + stringify
+          const parsed = safeParse(leftEditor.getValue());
+          if (parsed.ok) {
+            leftEditor.setValue(JSON.stringify(parsed.value, null, 2));
+          }
+        }
+        syncRightNow();
+      });
+
+      // Минификация
+      document.getElementById('minifyBtn').addEventListener('click', () => {
+        const parsed = safeParse(leftEditor.getValue());
+        if (parsed.ok) {
+          leftEditor.setValue(JSON.stringify(parsed.value));
+          syncRightNow();
+        }
+      });
+
+      // Копировать (левое окно)
+      document.getElementById('copyBtn').addEventListener('click', async () => {
+        const text = leftEditor.getValue();
+        try {
+          await navigator.clipboard.writeText(text);
+          setStatus('Скопировано в буфер обмена', true);
+        } catch {
+          setStatus('Не удалось скопировать', false);
+        }
+      });
+
+      // Загрузка файла
+      document.getElementById('loadBtn').addEventListener('click', () => {
+        document.getElementById('fileInput').click();
+      });
+      document.getElementById('fileInput').addEventListener('change', async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        const text = await file.text();
+        leftEditor.setValue(text);
+        syncRightNow();
+        e.target.value = '';
+      });
+
+      // Выгрузка (скачивание) JSON
+      document.getElementById('downloadBtn').addEventListener('click', () => {
+        const text = leftEditor.getValue();
+        const blob = new Blob([text], { type: 'application/json;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'data.json';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+      });
+    }
+  </script>
+</body>
+</html>
