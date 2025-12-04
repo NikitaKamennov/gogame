@@ -1,0 +1,1515 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover" />
+    <title>Медитация — Таймер, Музыка, Журнал</title>
+    <style>
+      :root {
+        --bg: #0f1222;
+        --panel: #141833;
+        --text: #e9ecff;
+        --muted: #a9b1d6;
+        --accent: #7c9fff;
+        --accent-2: #00d4ff;
+        --danger: #ff5a7a;
+        --ok: #2ecc71;
+        --warn: #ffb74d;
+        --ring: #8ab4ff;
+        --ring-bg: rgba(138, 180, 255, 0.15);
+        --border: #2a2f55;
+        --chip: #1a1f40;
+        --shadow: 0 10px 40px rgba(0, 0, 0, 0.35);
+      }
+      .light {
+        --bg: #eef3ff;
+        --panel: #ffffff;
+        --text: #1a1f36;
+        --muted: #5a668a;
+        --accent: #3b6cff;
+        --accent-2: #00a3ff;
+        --danger: #e53935;
+        --ok: #2e7d32;
+        --warn: #f59f00;
+        --ring: #3b6cff;
+        --ring-bg: rgba(59, 108, 255, 0.12);
+        --border: #e6e9f5;
+        --chip: #f6f8ff;
+        --shadow: 0 10px 30px rgba(17, 38, 146, 0.08);
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        margin: 0;
+        background: radial-gradient(
+            1200px 600px at 10% 0%,
+            rgba(0, 212, 255, 0.12),
+            transparent 60%
+          ),
+          radial-gradient(
+            1000px 500px at 90% 10%,
+            rgba(124, 159, 255, 0.15),
+            transparent 70%
+          ),
+          linear-gradient(180deg, var(--bg), #0b0e1b 60%, var(--bg));
+        color: var(--text);
+        font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial,
+          sans-serif;
+      }
+      .container {
+        max-width: 1200px;
+        margin: 24px auto;
+        padding: 0 16px;
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 20px;
+      }
+      @media (max-width: 980px) {
+        .container {
+          grid-template-columns: 1fr;
+        }
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 8px;
+        padding: 12px 16px;
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+      }
+      .brand .logo {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        box-shadow: 0 8px 24px rgba(0, 212, 255, 0.3),
+          inset 0 0 0 2px rgba(255, 255, 255, 0.2);
+      }
+      .brand .title {
+        font-size: 18px;
+      }
+      .theme-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 6px 10px;
+        cursor: pointer;
+        user-select: none;
+        box-shadow: var(--shadow);
+      }
+      .theme-toggle input {
+        display: none;
+      }
+      .theme-toggle .dot {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #ffd54f, #ff8f00);
+        box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35);
+      }
+      .theme-label {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 18px;
+        box-shadow: var(--shadow);
+      }
+      /* Top progress bar */
+      .top-progress {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 4px;
+        width: 100%;
+        background: linear-gradient(
+          90deg,
+          transparent,
+          rgba(255, 255, 255, 0.07)
+        );
+        z-index: 50;
+      }
+      .top-progress .bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, var(--accent), var(--accent-2));
+        transition: width 0.2s ease-out;
+        box-shadow: 0 0 10px var(--accent-2);
+      }
+      /* Main timer panel */
+      .timer-panel {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        gap: 12px;
+        min-height: 520px;
+      }
+      .grid-center {
+        display: grid;
+        place-items: center;
+        padding: 8px 0;
+      }
+      .timer-wrap {
+        position: relative;
+        width: 360px;
+        height: 360px;
+        display: grid;
+        place-items: center;
+      }
+      @media (max-width: 420px) {
+        .timer-wrap {
+          width: 300px;
+          height: 300px;
+        }
+      }
+      @media (max-width: 340px) {
+        .timer-wrap {
+          width: 260px;
+          height: 260px;
+        }
+        .timer-value {
+          font-size: 56px;
+        }
+      }
+      .timer-value {
+        font-size: 68px;
+        font-weight: 800;
+        letter-spacing: 1px;
+        text-shadow: 0 6px 30px rgba(0, 0, 0, 0.35);
+      }
+      .subnote {
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 13px;
+        text-align: center;
+      }
+      .controls {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      .controls .btn {
+        min-width: 140px;
+      }
+      @media (max-width: 480px) {
+        .controls .btn {
+          flex: 1 1 100%;
+          width: 100%;
+        }
+      }
+      .btn {
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        color: #001221;
+        border: none;
+        padding: 10px 14px;
+        border-radius: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        box-shadow: var(--shadow);
+      }
+      .btn.secondary {
+        background: var(--chip);
+        color: var(--text);
+        border: 1px solid var(--border);
+        font-weight: 600;
+      }
+      .btn.danger {
+        background: linear-gradient(135deg, #ff6b6b, #ff2e63);
+        color: #fff;
+      }
+      .btn:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      /* ring */
+      svg#ring {
+        position: absolute;
+        inset: 0;
+      }
+      .ring-bg {
+        stroke: var(--ring-bg);
+      }
+      .ring-fg {
+        stroke: var(--ring);
+        filter: drop-shadow(0 0 10px rgba(138, 180, 255, 0.5));
+      }
+      /* right side */
+      .side {
+        display: grid;
+        gap: 16px;
+      }
+      .section-title {
+        font-size: 14px;
+        color: var(--muted);
+        margin: 0 0 10px;
+        letter-spacing: 0.3px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+      .row > div {
+        display: grid;
+        gap: 6px;
+      }
+      @media (max-width: 640px) {
+        .row {
+          grid-template-columns: 1fr;
+        }
+      }
+      .form-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin: 10px 0;
+      }
+      @media (max-width: 640px) {
+        .form-row {
+          flex-wrap: wrap;
+          align-items: stretch;
+        }
+        .form-row > * {
+          flex: 1 1 100%;
+        }
+      }
+      .input,
+      select {
+        background: var(--chip);
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px 12px;
+        outline: none;
+        width: 100%;
+      }
+      .range {
+        width: 100%;
+      }
+      .switch {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        user-select: none;
+      }
+      .switch input {
+        display: none;
+      }
+      .switch .track {
+        width: 44px;
+        height: 24px;
+        background: var(--chip);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        position: relative;
+      }
+      .switch .thumb {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        left: 3px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--accent), var(--accent-2));
+        transition: left 0.15s;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      }
+      .switch input:checked + .track .thumb {
+        left: 23px;
+      }
+      /* tracks list */
+      .tracks {
+        display: grid;
+        gap: 8px;
+        max-height: 280px;
+        overflow: auto;
+      }
+      .track {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        align-items: center;
+        padding: 10px;
+        border-radius: 12px;
+        background: var(--chip);
+        border: 1px solid var(--border);
+      }
+      .track.active {
+        box-shadow: inset 0 0 0 2px var(--accent);
+      }
+      .track .meta {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .badge {
+        font-size: 11px;
+        padding: 2px 6px;
+        border-radius: 999px;
+        background: rgba(124, 159, 255, 0.15);
+        border: 1px solid var(--border);
+        color: var(--text);
+      }
+      /* stats and journal */
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+      }
+      @media (max-width: 780px) {
+        .stats {
+          grid-template-columns: 1fr;
+        }
+      }
+      .stat {
+        background: var(--chip);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 12px;
+        display: grid;
+        gap: 6px;
+      }
+      .stat .label {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .stat .value {
+        font-size: 18px;
+        font-weight: 800;
+      }
+      .journal {
+        display: grid;
+        gap: 8px;
+        max-height: 260px;
+        overflow: auto;
+      }
+      .entry {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+        align-items: center;
+        padding: 8px 10px;
+        border-radius: 10px;
+        background: var(--chip);
+        border: 1px solid var(--border);
+      }
+      .entry .meta {
+        color: var(--muted);
+        font-size: 12px;
+      }
+      /* footer */
+      footer {
+        opacity: 0.8;
+        text-align: center;
+        font-size: 12px;
+        color: var(--muted);
+        padding: 8px 16px 22px;
+      }
+      .kbd {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 12px;
+        background: var(--chip);
+        border: 1px solid var(--border);
+        padding: 2px 6px;
+        border-radius: 6px;
+      }
+      .small {
+        font-size: 12px;
+        color: var(--muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top-progress"><div id="topBar" class="bar"></div></div>
+
+    <header>
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div class="title">Медитация — Таймер и Музыка</div>
+      </div>
+      <label class="theme-toggle" title="Тема: Светлая/Тёмная">
+        <input id="themeToggle" type="checkbox" />
+        <span class="dot"></span>
+        <span class="theme-label" id="themeLabel">Тёмная</span>
+      </label>
+    </header>
+
+    <div class="container">
+      <!-- Main Timer -->
+      <section class="panel timer-panel" aria-label="Таймер медитации">
+        <div class="grid-center">
+          <div class="timer-wrap">
+            <svg
+              id="ring"
+              viewBox="0 0 360 360"
+              width="100%"
+              height="100%"
+              aria-hidden="true">
+              <defs>
+                <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="var(--accent)" />
+                  <stop offset="100%" stop-color="var(--accent-2)" />
+                </linearGradient>
+              </defs>
+              <circle
+                class="ring-bg"
+                cx="180"
+                cy="180"
+                r="150"
+                fill="none"
+                stroke-width="22" />
+              <circle
+                id="ringFg"
+                class="ring-fg"
+                cx="180"
+                cy="180"
+                r="150"
+                fill="none"
+                stroke="url(#ringGrad)"
+                stroke-width="22"
+                stroke-linecap="round"
+                stroke-dasharray="942"
+                stroke-dashoffset="0"
+                transform="rotate(-90 180 180)" />
+            </svg>
+            <div id="time" class="timer-value" aria-live="polite">10:00</div>
+          </div>
+
+          <div id="subnote" class="subnote">
+            Готовы к медитации. Трек: — • Режим: —
+          </div>
+
+          <div class="controls">
+            <button
+              id="btnStartPause"
+              class="btn"
+              aria-label="Старт/Пауза (Space)">
+              Старт
+            </button>
+            <button id="btnReset" class="btn secondary" aria-label="Сброс (R)">
+              Сброс
+            </button>
+          </div>
+
+          <div class="subnote">
+            Горячие клавиши: <span class="kbd">Space</span> Старт/Пауза ·
+            <span class="kbd">R</span> Сброс
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat">
+            <div class="label">Сегодня сессий</div>
+            <div id="statSessions" class="value">0</div>
+          </div>
+          <div class="stat">
+            <div class="label">Время в медитации (сегодня)</div>
+            <div id="statMeditation" class="value">00:00</div>
+          </div>
+          <div class="stat">
+            <div class="label">Текущая длительность</div>
+            <div id="statCurrentDur" class="value">10 мин</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Side settings and music -->
+      <aside class="side">
+        <section class="panel" aria-label="Музыка и настройки">
+          <h3 class="section-title">Музыка</h3>
+
+          <div class="row">
+            <div>
+              <label for="inpMinutes">Длительность сессии (мин)</label>
+              <input
+                id="inpMinutes"
+                class="input"
+                type="number"
+                min="1"
+                max="180"
+                step="1"
+                inputmode="numeric"
+                autocomplete="off" />
+            </div>
+            <div>
+              <label for="rngVolume">Громкость музыки</label>
+              <input
+                id="rngVolume"
+                class="range"
+                type="range"
+                min="0"
+                max="1"
+                step="0.01" />
+            </div>
+          </div>
+
+          <div class="form-row">
+            <label
+              class="switch"
+              title="Автоматически запускать музыку при старте таймера">
+              <input id="chkAutoPlayMusic" type="checkbox" />
+              <span class="track"><span class="thumb"></span></span>
+              <span>Автозапуск музыки</span>
+            </label>
+          </div>
+
+          <div class="form-row">
+            <label
+              class="switch"
+              title="Мягкий сигнал за 30 секунд до конца сессии">
+              <input id="chkPreEndSignal" type="checkbox" />
+              <span class="track"><span class="thumb"></span></span>
+              <span>Сигнал за 30 сек до конца</span>
+            </label>
+          </div>
+
+          <div class="form-row">
+            <label class="switch" title="Сигнал по завершению сессии">
+              <input id="chkEndSignal" type="checkbox" />
+              <span class="track"><span class="thumb"></span></span>
+              <span>Сигнал в конце</span>
+            </label>
+          </div>
+
+          <div class="form-row">
+            <label class="switch" title="Плавное затухание музыки по окончании">
+              <input id="chkFadeOut" type="checkbox" />
+              <span class="track"><span class="thumb"></span></span>
+              <span>Плавное затухание в конце</span>
+            </label>
+          </div>
+
+          <div class="form-row">
+            <div>
+              <label for="selMode">Режим воспроизведения</label>
+              <select id="selMode" class="input">
+                <option value="single">Один трек по кругу</option>
+                <option value="sequential" selected>
+                  Последовательно (с выбранного)
+                </option>
+                <option value="random">Случайно</option>
+              </select>
+            </div>
+            <div>
+              <label for="filter">Поиск по трекам</label>
+              <input
+                id="filter"
+                class="input"
+                type="text"
+                placeholder="Название или часть..."
+                autocomplete="off" />
+            </div>
+          </div>
+
+          <div id="tracks" class="tracks" aria-live="polite">
+            <div class="small">
+              Загрузка списка треков из /static/meditationmusic/ ...
+            </div>
+          </div>
+
+          <div class="small">
+            Источник: /static/meditationmusic/ — mp3 из этой папки автоматически
+            подхватываются (manifest.json или autoindex).
+          </div>
+        </section>
+
+        <section class="panel" aria-label="Журнал">
+          <h3 class="section-title">Журнал сессий (сегодня)</h3>
+          <div id="journal" class="journal" aria-live="polite"></div>
+        </section>
+      </aside>
+    </div>
+
+    <footer>
+      Медитация помогает расслабиться и сфокусироваться. Выберите трек,
+      настройте длительность и начинайте. Помните про мягкий сигнал за 30 секунд
+      до конца. Хорошей практики.
+    </footer>
+
+    <script>
+      /* ===========================
+   Ключи LocalStorage
+=========================== */
+      const LS_SETTINGS = "medit_settings_v1";
+      const LS_STATE = "medit_state_v1";
+      const LS_JOURNAL = "medit_journal_v1";
+      const LS_TRACKS = "medit_tracks_cache_v1";
+
+      /* ===========================
+   DOM ссылки
+=========================== */
+      const ringFg = document.getElementById("ringFg");
+      const timeEl = document.getElementById("time");
+      const subnoteEl = document.getElementById("subnote");
+      const topBar = document.getElementById("topBar");
+
+      const btnStartPause = document.getElementById("btnStartPause");
+      const btnReset = document.getElementById("btnReset");
+
+      const statSessions = document.getElementById("statSessions");
+      const statMeditation = document.getElementById("statMeditation");
+      const statCurrentDur = document.getElementById("statCurrentDur");
+
+      const inpMinutes = document.getElementById("inpMinutes");
+      const rngVolume = document.getElementById("rngVolume");
+      const chkAutoPlayMusic = document.getElementById("chkAutoPlayMusic");
+      const chkPreEndSignal = document.getElementById("chkPreEndSignal");
+      const chkEndSignal = document.getElementById("chkEndSignal");
+      const chkFadeOut = document.getElementById("chkFadeOut");
+
+      const selMode = document.getElementById("selMode");
+      const filterInput = document.getElementById("filter");
+      const tracksWrap = document.getElementById("tracks");
+
+      const journalWrap = document.getElementById("journal");
+
+      const themeToggle = document.getElementById("themeToggle");
+      const themeLabel = document.getElementById("themeLabel");
+
+      /* ===========================
+   Состояния и настройки
+=========================== */
+      const defaultSettings = {
+        minutes: 10,
+        volume: 0.6,
+        autoPlayMusic: true,
+        preEndSignal: true,
+        endSignal: true,
+        fadeOut: true,
+        playMode: "sequential", // 'single' | 'sequential' | 'random'
+        theme: "dark",
+      };
+      let settings = load(LS_SETTINGS, defaultSettings);
+
+      const defaultState = {
+        running: false,
+        endAt: 0, // timestamp ms
+        remainSec: defaultSettings.minutes * 60,
+        selectedTrackIdx: -1, // индекс в массиве tracks
+        todayKey: todayKey(),
+        preEndFired: false, // флаг предсигнала
+        startedAt: 0, // timestamp начала текущей сессии
+      };
+      let state = normalizeState(load(LS_STATE, defaultState));
+
+      let journal = load(LS_JOURNAL, []); // [{dateKey, startAt, endAt, durationSec, trackTitle, mode}]
+      let tracksCache = load(LS_TRACKS, { files: {}, timestamp: 0 }); // {files: {url: {title, duration}}}
+
+      let tracks = []; // [{url, title, durationSec}]
+      let audio = null;
+      let audioCtx = null;
+
+      /* ===========================
+   Утилиты хранения и даты
+=========================== */
+      function load(key, fallback) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return structuredClone(fallback);
+          const data = JSON.parse(raw);
+          return Object.assign(structuredClone(fallback), data);
+        } catch {
+          return structuredClone(fallback);
+        }
+      }
+      function save(key, data) {
+        localStorage.setItem(key, JSON.stringify(data));
+      }
+      function todayKey() {
+        const d = new Date();
+        return (
+          d.getFullYear() +
+          "-" +
+          String(d.getMonth() + 1).padStart(2, "0") +
+          "-" +
+          String(d.getDate()).padStart(2, "0")
+        );
+      }
+      function normalizeState(s) {
+        if (s.todayKey !== todayKey()) {
+          s.todayKey = todayKey();
+          s.preEndFired = false;
+        }
+        return s;
+      }
+      function formatTime(sec) {
+        const m = Math.floor(sec / 60);
+        const s = Math.floor(sec % 60);
+        return String(m).padStart(2, "0") + ":" + String(s).padStart(2, "0");
+      }
+      function formatHM(mins) {
+        return mins + " мин";
+      }
+
+      /* ===========================
+   Звук сигналов (Web Audio)
+=========================== */
+      function ensureAudioCtx() {
+        if (!audioCtx) {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === "suspended") audioCtx.resume();
+      }
+      function playChime(kind = "end", gainScale = 1) {
+        // kind: 'pre' (мягкий), 'end' (чуть более заметный)
+        ensureAudioCtx();
+        const ctx = audioCtx;
+        const now = ctx.currentTime;
+
+        const g = ctx.createGain();
+        g.gain.value = Math.max(0.0001, settings.volume * 0.4 * gainScale);
+        g.connect(ctx.destination);
+
+        const osc = ctx.createOscillator();
+        osc.type = "triangle";
+        osc.connect(g);
+
+        let freqs = kind === "pre" ? [523, 659] : [659, 784, 988]; // C5-E5, потом E5-G5-B5
+        let t = now;
+        const step = kind === "pre" ? 0.18 : 0.14;
+
+        freqs.forEach((f, i) => {
+          osc.frequency.setValueAtTime(f, t);
+          g.gain.setValueAtTime(g.gain.value, t);
+          g.gain.exponentialRampToValueAtTime(0.0008, t + step - 0.02);
+          t += step;
+          if (i === freqs.length - 1) {
+            g.gain.setValueAtTime(0.0001, t + 0.01);
+          }
+        });
+
+        osc.start(now);
+        osc.stop(now + (kind === "pre" ? 0.45 : 0.55));
+        osc.onended = () => {
+          osc.disconnect();
+          g.disconnect();
+        };
+      }
+
+      /* ===========================
+   Музыка: загрузка и плеер
+=========================== */
+      const MUSIC_DIR = "/static/meditationmusic/";
+
+      async function loadTracksList() {
+        // 1) manifest.json
+        try {
+          const r = await fetch(MUSIC_DIR + "manifest.json", {
+            cache: "no-cache",
+          });
+          if (r.ok) {
+            const data = await r.json();
+            if (Array.isArray(data.tracks)) {
+              const items = data.tracks
+                .filter(
+                  (t) =>
+                    t &&
+                    typeof t.file === "string" &&
+                    t.file.toLowerCase().endsWith(".mp3")
+                )
+                .map((t) => ({
+                  url: MUSIC_DIR + t.file,
+                  title: t.title ? String(t.title) : titleFromUrl(t.file),
+                  durationSec: Number(t.durationSec) || null,
+                }));
+              return uniqueByUrl(items);
+            }
+          }
+        } catch {}
+
+        // 2) autoindex HTML
+        try {
+          const r = await fetch(MUSIC_DIR, { cache: "no-cache" });
+          if (r.ok) {
+            const html = await r.text();
+            const hrefs = Array.from(
+              html.matchAll(/href="([^"]+\.mp3)"/gi)
+            ).map((m) => m[1]);
+            const items = hrefs.map((href) => {
+              const file = decodeURI(href).replace(/^\.?\//, "");
+              return {
+                url: MUSIC_DIR + file,
+                title: titleFromUrl(file),
+                durationSec: null,
+              };
+            });
+            return uniqueByUrl(items);
+          }
+        } catch {}
+
+        return [];
+      }
+      function uniqueByUrl(arr) {
+        const seen = new Set();
+        return arr.filter((x) => {
+          const k = x.url;
+          if (seen.has(k)) return false;
+          seen.add(k);
+          return true;
+        });
+      }
+      function titleFromUrl(file) {
+        const n = file.split("/").pop() || file;
+        const base = n.replace(/\.mp3$/i, "");
+        return decodeURIComponent(base).replace(/[_-]+/g, " ").trim();
+      }
+
+      async function fillDurations(items) {
+        // используем кэш где доступно
+        const toProbe = [];
+        for (const it of items) {
+          const cached = tracksCache.files[it.url];
+          if (
+            cached &&
+            typeof cached.durationSec === "number" &&
+            cached.title
+          ) {
+            it.durationSec = it.durationSec ?? cached.durationSec;
+            it.title = it.title || cached.title;
+          }
+          if (!it.durationSec) toProbe.push(it);
+        }
+        // ограничим конкурентность
+        const CONC = 3;
+        for (let i = 0; i < toProbe.length; i += CONC) {
+          const chunk = toProbe.slice(i, i + CONC);
+          await Promise.all(chunk.map(probeMeta));
+        }
+        // сохранить кэш
+        for (const it of items) {
+          if (!tracksCache.files[it.url]) tracksCache.files[it.url] = {};
+          tracksCache.files[it.url].title = it.title;
+          if (typeof it.durationSec === "number")
+            tracksCache.files[it.url].durationSec = it.durationSec;
+        }
+        tracksCache.timestamp = Date.now();
+        save(LS_TRACKS, tracksCache);
+      }
+      function probeMeta(item) {
+        return new Promise((resolve) => {
+          const a = document.createElement("audio");
+          a.preload = "metadata";
+          a.src = item.url;
+          const onLoaded = () => {
+            if (isFinite(a.duration) && a.duration > 0) {
+              item.durationSec = Math.round(a.duration);
+            }
+            cleanup();
+          };
+          const onError = () => {
+            cleanup();
+          };
+          const cleanup = () => {
+            a.removeEventListener("loadedmetadata", onLoaded);
+            a.removeEventListener("error", onError);
+            resolve();
+          };
+          a.addEventListener("loadedmetadata", onLoaded, { once: true });
+          a.addEventListener("error", onError, { once: true });
+        });
+      }
+
+      function ensureAudio() {
+        if (!audio) {
+          audio = new Audio();
+          audio.preload = "auto";
+          audio.crossOrigin = "anonymous";
+          audio.volume = Number(rngVolume.value || settings.volume);
+          audio.addEventListener("ended", onTrackEnded);
+        }
+        return audio;
+      }
+      function setTrackByIndex(idx) {
+        if (!tracks.length) return;
+        idx = ((idx % tracks.length) + tracks.length) % tracks.length;
+        state.selectedTrackIdx = idx;
+        save(LS_STATE, state);
+        const a = ensureAudio();
+        a.loop = settings.playMode === "single";
+        a.src = tracks[idx].url;
+        a.load();
+        updateSubnote();
+        highlightTracks();
+      }
+      function onTrackEnded() {
+        if (settings.playMode === "single") {
+          // loop=true обычно перезапускает сам, но на некоторых платформах полезен guard.
+          return;
+        }
+        const nextIdx = nextIndex();
+        setTrackByIndex(nextIdx);
+        if (state.running) {
+          ensureAudioResume();
+          audio.play().catch(() => {});
+        }
+      }
+      function nextIndex() {
+        if (!tracks.length) return -1;
+        const cur = state.selectedTrackIdx < 0 ? 0 : state.selectedTrackIdx;
+        if (settings.playMode === "sequential") {
+          return (cur + 1) % tracks.length;
+        }
+        // random: избегаем повторов подряд, используем мешок
+        let idx = Math.floor(Math.random() * tracks.length);
+        if (tracks.length > 1 && idx === cur) {
+          idx = (idx + 1) % tracks.length;
+        }
+        return idx;
+      }
+      function ensureAudioResume() {
+        // разблокировать звук в iOS/Chrome после пользовательского жеста
+        try {
+          if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+        } catch {}
+      }
+
+      /* ===========================
+   Таймер
+=========================== */
+      let bgIntervalId = null;
+      let endTimeoutId = null;
+      let preEndTimeoutId = null;
+
+      function clearBgTimers() {
+        if (bgIntervalId) {
+          clearInterval(bgIntervalId);
+          bgIntervalId = null;
+        }
+        if (endTimeoutId) {
+          clearTimeout(endTimeoutId);
+          endTimeoutId = null;
+        }
+        if (preEndTimeoutId) {
+          clearTimeout(preEndTimeoutId);
+          preEndTimeoutId = null;
+        }
+      }
+      function modeDurationSec() {
+        return Math.max(1, Number(settings.minutes)) * 60;
+      }
+      function start() {
+        ensureAudioCtx();
+        if (state.running) return;
+        const base =
+          state.remainSec && state.remainSec > 0
+            ? state.remainSec
+            : modeDurationSec();
+        state.endAt = Date.now() + base * 1000;
+        state.running = true;
+        state.preEndFired = false;
+        state.startedAt = Date.now();
+        save(LS_STATE, state);
+
+        // музыка
+        if (
+          settings.autoPlayMusic &&
+          tracks.length &&
+          state.selectedTrackIdx >= 0
+        ) {
+          const a = ensureAudio();
+          a.volume = Number(rngVolume.value || settings.volume);
+          a.loop = settings.playMode === "single";
+          ensureAudioResume();
+          a.play().catch(() => {});
+        }
+
+        loop();
+        clearBgTimers();
+        endTimeoutId = setTimeout(() => checkDeadline(), base * 1000 + 50);
+        bgIntervalId = setInterval(checkDeadline, 1000);
+
+        // предсигнал за 30 секунд до конца
+        schedulePreEnd();
+        updateUI();
+      }
+      function pause() {
+        if (!state.running) return;
+        state.remainSec = Math.max(
+          0,
+          Math.round((state.endAt - Date.now()) / 1000)
+        );
+        state.endAt = 0;
+        state.running = false;
+        clearBgTimers();
+        save(LS_STATE, state);
+        // пауза музыки
+        if (audio && !audio.paused) {
+          audio.pause();
+        }
+        updateUI();
+      }
+      function resetTimer() {
+        state.remainSec = modeDurationSec();
+        state.endAt = 0;
+        state.running = false;
+        state.preEndFired = false;
+        state.startedAt = 0;
+        clearBgTimers();
+        save(LS_STATE, state);
+        // опционально остановить музыку
+        if (audio && !audio.paused) {
+          audio.pause();
+          audio.currentTime = 0;
+        }
+        updateUI();
+      }
+      function loop() {
+        if (!state.running) {
+          updateUI();
+          return;
+        }
+        const remain = Math.max(
+          0,
+          Math.round((state.endAt - Date.now()) / 1000)
+        );
+        if (remain !== state.remainSec) {
+          state.remainSec = remain;
+        }
+        if (!state.preEndFired && settings.preEndSignal && remain === 30) {
+          state.preEndFired = true;
+          playChime("pre", 0.9);
+          save(LS_STATE, state);
+        }
+        updateUI();
+        if (remain <= 0) {
+          onComplete();
+          return;
+        }
+        requestAnimationFrame(loop);
+      }
+      function checkDeadline() {
+        if (!state.running) return;
+        const remainMs = state.endAt - Date.now();
+        if (remainMs <= 0) {
+          onComplete();
+          return;
+        }
+        const sec = Math.max(0, Math.round(remainMs / 1000));
+        if (sec !== state.remainSec) {
+          state.remainSec = sec;
+          save(LS_STATE, state);
+        }
+        updateUI();
+      }
+      function schedulePreEnd() {
+        if (!settings.preEndSignal) return;
+        const ms = state.endAt - Date.now() - 30000; // за 30 сек
+        if (ms > 0) {
+          preEndTimeoutId = setTimeout(() => {
+            if (!state.preEndFired && state.running) {
+              state.preEndFired = true;
+              save(LS_STATE, state);
+              playChime("pre", 0.9);
+            }
+          }, ms);
+        }
+      }
+      async function onComplete() {
+        clearBgTimers();
+        const fullDur = modeDurationSec();
+        const spent = Math.max(0, fullDur - state.remainSec);
+
+        // сигнал в конце, если нужно
+        if (settings.endSignal) {
+          playChime("end", 1.0);
+        }
+        // плавное затухание музыки
+        if (settings.fadeOut && audio && !audio.paused) {
+          await fadeOutAudio(audio, 1800);
+          audio.pause();
+          try {
+            audio.currentTime = 0;
+          } catch {}
+        }
+
+        // журнал
+        const tr = tracks[state.selectedTrackIdx];
+        addJournalEntry({
+          dateKey: todayKey(),
+          startAt: state.startedAt || Date.now() - spent * 1000,
+          endAt: Date.now(),
+          durationSec: spent || fullDur,
+          trackTitle: tr ? tr.title : "—",
+          mode: settings.playMode,
+        });
+
+        // сброс к стартовому состоянию
+        state.running = false;
+        state.endAt = 0;
+        state.remainSec = modeDurationSec();
+        state.preEndFired = false;
+        state.startedAt = 0;
+        save(LS_STATE, state);
+        updateUI();
+      }
+      function fadeOutAudio(a, ms = 1500) {
+        return new Promise((resolve) => {
+          const startVol = a.volume;
+          const steps = 15;
+          const dt = ms / steps;
+          let i = 0;
+          const t = setInterval(() => {
+            i++;
+            const k = 1 - i / steps;
+            a.volume = Math.max(0, startVol * k);
+            if (i >= steps) {
+              clearInterval(t);
+              a.volume = 0;
+              resolve();
+            }
+          }, dt);
+        });
+      }
+
+      /* ===========================
+   Журнал
+=========================== */
+      function addJournalEntry(entry) {
+        journal.push(entry);
+        // чистим старые (оставим 200 последних)
+        if (journal.length > 200) journal = journal.slice(-200);
+        save(LS_JOURNAL, journal);
+        renderJournal();
+      }
+      function renderJournal() {
+        const today = todayKey();
+        const items = journal
+          .filter((x) => x.dateKey === today)
+          .slice()
+          .reverse();
+        journalWrap.innerHTML = "";
+        if (!items.length) {
+          const d = document.createElement("div");
+          d.className = "small";
+          d.textContent =
+            "Пока записей нет. Начните медитацию и записи появятся.";
+          journalWrap.appendChild(d);
+        } else {
+          let total = 0;
+          for (const e of items) {
+            total += e.durationSec || 0;
+            const div = document.createElement("div");
+            div.className = "entry";
+            const left = document.createElement("div");
+            const st = new Date(e.startAt);
+            const et = new Date(e.endAt);
+            const timeLabel = [
+              st.getHours().toString().padStart(2, "0") +
+                ":" +
+                st.getMinutes().toString().padStart(2, "0"),
+              "—",
+              et.getHours().toString().padStart(2, "0") +
+                ":" +
+                et.getMinutes().toString().padStart(2, "0"),
+            ].join(" ");
+            left.innerHTML =
+              "<div><strong>" +
+              (e.trackTitle || "—") +
+              "</strong></div>" +
+              '<div class="meta">' +
+              timeLabel +
+              " • Режим: " +
+              e.mode +
+              "</div>";
+            const right = document.createElement("div");
+            right.innerHTML =
+              '<span class="badge">' +
+              formatTime(e.durationSec || 0) +
+              "</span>";
+            div.appendChild(left);
+            div.appendChild(right);
+            journalWrap.appendChild(div);
+          }
+          // обновить статистику "сегодня"
+          statSessions.textContent = String(items.length);
+          statMeditation.textContent = formatTime(total);
+        }
+      }
+
+      /* ===========================
+   Рендер треков и UI
+=========================== */
+      function renderTracks(list) {
+        tracksWrap.innerHTML = "";
+        const q = (filterInput.value || "").toLowerCase();
+        const filtered = list.filter((t) =>
+          (t.title || "").toLowerCase().includes(q)
+        );
+
+        if (!filtered.length) {
+          const d = document.createElement("div");
+          d.className = "small";
+          d.textContent = q
+            ? "Нет совпадений по фильтру"
+            : "В папке нет mp3 файлов";
+          tracksWrap.appendChild(d);
+          return;
+        }
+
+        filtered.forEach((t, idxFiltered) => {
+          const realIdx = list.indexOf(t);
+          const item = document.createElement("div");
+          item.className =
+            "track" + (realIdx === state.selectedTrackIdx ? " active" : "");
+          const left = document.createElement("div");
+          left.innerHTML =
+            '<div class="title">' +
+            (t.title || "Без названия") +
+            "</div>" +
+            '<div class="meta">' +
+            (t.durationSec ? formatTime(t.durationSec) : "—:—") +
+            "</div>";
+          const right = document.createElement("div");
+          const btn = document.createElement("button");
+          btn.className = "btn secondary";
+          btn.textContent =
+            realIdx === state.selectedTrackIdx ? "Выбрано" : "Выбрать";
+          btn.onclick = () => {
+            setTrackByIndex(realIdx);
+            highlightTracks();
+          };
+          right.appendChild(btn);
+          item.appendChild(left);
+          item.appendChild(right);
+          tracksWrap.appendChild(item);
+        });
+      }
+      function highlightTracks() {
+        const nodes = tracksWrap.querySelectorAll(".track");
+        nodes.forEach((n) => n.classList.remove("active"));
+        const q = (filterInput.value || "").toLowerCase();
+        const filtered = tracks.filter((t) =>
+          (t.title || "").toLowerCase().includes(q)
+        );
+        filtered.forEach((t, i) => {
+          const realIdx = tracks.indexOf(t);
+          const node = tracksWrap.children[i];
+          if (!node) return;
+          if (realIdx === state.selectedTrackIdx) {
+            node.classList.add("active");
+            const btn = node.querySelector("button");
+            if (btn) btn.textContent = "Выбрано";
+          } else {
+            const btn = node.querySelector("button");
+            if (btn) btn.textContent = "Выбрать";
+          }
+        });
+      }
+
+      function updateSubnote() {
+        const tr = tracks[state.selectedTrackIdx];
+        const trackText = tr ? tr.title : "—";
+        const modeText =
+          settings.playMode === "single"
+            ? "Один трек по кругу"
+            : settings.playMode === "random"
+            ? "Случайно"
+            : "Последовательно";
+        subnoteEl.textContent = "Трек: " + trackText + " • Режим: " + modeText;
+      }
+      function updateRing() {
+        const total = modeDurationSec();
+        const remain = state.running
+          ? Math.max(0, Math.round((state.endAt - Date.now()) / 1000))
+          : state.remainSec;
+        const progress = 1 - remain / total;
+        const r = 150;
+        const C = 2 * Math.PI * r;
+        ringFg.setAttribute("stroke-dasharray", String(C));
+        ringFg.setAttribute("stroke-dashoffset", String(C * (1 - progress)));
+        topBar.style.width = (progress * 100).toFixed(2) + "%";
+      }
+      function updateButtons() {
+        btnStartPause.textContent = state.running ? "Пауза" : "Старт";
+      }
+      function updateStatsCard() {
+        statCurrentDur.textContent = formatHM(settings.minutes);
+      }
+      function updateInputs() {
+        inpMinutes.value = settings.minutes;
+        rngVolume.value = settings.volume;
+        chkAutoPlayMusic.checked = !!settings.autoPlayMusic;
+        chkPreEndSignal.checked = !!settings.preEndSignal;
+        chkEndSignal.checked = !!settings.endSignal;
+        chkFadeOut.checked = !!settings.fadeOut;
+        selMode.value = settings.playMode;
+
+        const isLight = settings.theme === "light";
+        document.body.classList.toggle("light", isLight);
+        themeToggle.checked = isLight;
+        themeLabel.textContent = isLight ? "Светлая" : "Тёмная";
+      }
+      function updateTimerFace() {
+        const remain = state.running
+          ? Math.max(0, Math.round((state.endAt - Date.now()) / 1000))
+          : state.remainSec;
+        timeEl.textContent = formatTime(remain);
+      }
+      function updateUI() {
+        updateRing();
+        updateTimerFace();
+        updateButtons();
+        updateSubnote();
+        updateStatsCard();
+        document.title = "🧘 " + timeEl.textContent + " — Медитация";
+      }
+
+      /* ===========================
+   События UI
+=========================== */
+      btnStartPause.onclick = () => (state.running ? pause() : start());
+      btnReset.onclick = () => resetTimer();
+
+      inpMinutes.onchange = () => {
+        settings.minutes = clampInt(inpMinutes.value, 1, 180);
+        save(LS_SETTINGS, settings);
+        if (!state.running) {
+          state.remainSec = modeDurationSec();
+          save(LS_STATE, state);
+          updateUI();
+        }
+        updateStatsCard();
+      };
+      rngVolume.oninput = () => {
+        settings.volume = Number(rngVolume.value);
+        save(LS_SETTINGS, settings);
+        if (audio) audio.volume = settings.volume;
+      };
+      selMode.onchange = () => {
+        settings.playMode = selMode.value;
+        save(LS_SETTINGS, settings);
+        if (audio) audio.loop = settings.playMode === "single";
+        updateSubnote();
+      };
+
+      chkAutoPlayMusic.onchange = () => {
+        settings.autoPlayMusic = chkAutoPlayMusic.checked;
+        save(LS_SETTINGS, settings);
+      };
+      chkPreEndSignal.onchange = () => {
+        settings.preEndSignal = chkPreEndSignal.checked;
+        save(LS_SETTINGS, settings);
+      };
+      chkEndSignal.onchange = () => {
+        settings.endSignal = chkEndSignal.checked;
+        save(LS_SETTINGS, settings);
+      };
+      chkFadeOut.onchange = () => {
+        settings.fadeOut = chkFadeOut.checked;
+        save(LS_SETTINGS, settings);
+      };
+
+      filterInput.oninput = () => {
+        renderTracks(tracks);
+        highlightTracks();
+      };
+
+      themeToggle.onchange = () => {
+        settings.theme = themeToggle.checked ? "light" : "dark";
+        save(LS_SETTINGS, settings);
+        updateInputs();
+        updateUI();
+      };
+
+      // Горячие клавиши
+      window.addEventListener("keydown", (e) => {
+        if (
+          ["INPUT", "TEXTAREA"].includes((e.target.tagName || "").toUpperCase())
+        )
+          return;
+        if (e.code === "Space") {
+          e.preventDefault();
+          state.running ? pause() : start();
+        }
+        if (e.code === "KeyR") {
+          e.preventDefault();
+          resetTimer();
+        }
+      });
+
+      // visibility
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible") checkDeadline();
+      });
+      window.addEventListener("pageshow", () => {
+        checkDeadline();
+      });
+      window.addEventListener("pagehide", () => {
+        save(LS_STATE, state);
+      });
+
+      /* ===========================
+   Утилиты
+=========================== */
+      function clampInt(v, min, max) {
+        const n = Math.floor(Number(v) || 0);
+        return Math.max(min, Math.min(max, n));
+      }
+
+      /* ===========================
+   Инициализация
+=========================== */
+      async function init() {
+        // инпуты и тема
+        updateInputs();
+
+        // загрузка списка треков
+        tracks = await loadTracksList();
+        if (tracks.length) {
+          await fillDurations(tracks);
+        }
+        renderTracks(tracks);
+
+        // если ещё не выбран трек — выбираем первый
+        if (state.selectedTrackIdx < 0 && tracks.length) {
+          state.selectedTrackIdx = 0;
+          save(LS_STATE, state);
+          setTrackByIndex(0);
+        } else if (tracks.length) {
+          setTrackByIndex(Math.min(state.selectedTrackIdx, tracks.length - 1));
+        }
+
+        // восстановление таймера
+        if (state.running && state.endAt > Date.now()) {
+          loop();
+          clearBgTimers();
+          const remain = Math.max(
+            0,
+            Math.round((state.endAt - Date.now()) / 1000)
+          );
+          endTimeoutId = setTimeout(() => checkDeadline(), remain * 1000 + 50);
+          bgIntervalId = setInterval(checkDeadline, 1000);
+          schedulePreEnd();
+        } else if (state.running) {
+          // был запущен, но дедлайн прошёл
+          onComplete();
+        }
+
+        renderJournal();
+        updateUI();
+      }
+
+      init();
+    </script>
+  </body>
+</html>
